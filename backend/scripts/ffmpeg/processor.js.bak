@@ -1,0 +1,194 @@
+// backend/scripts/ffmpeg/processor.js — T-07/T-08
+// FFmpeg wrapper: clip, crop (9:16/1:1/16:9), burn ASS subtitle.
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const { getTemplate } = require('../subtitles/templates');
+
+function srtTimeToAss(t) {
+  // 00:01:23,456 atau 00:01:23.456 -> 0:00:01:23.45
+  const m = String(t).trim().match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mi = parseInt(m[2], 10), s = parseInt(m[3], 10);
+  const cs = m[4].padEnd(3, '0').slice(0, 2); // centiseconds
+  return `${h}:${String(mi).padStart(2, '0')}:${String(s).padStart(2, '0')}.${cs}`;
+}
+
+function assTimeToSec(t) {
+  const m = String(t).match(/(\d+):(\d+):(\d+)[.](\d+)/);
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10) + parseInt(m[4], 10) / 100;
+}
+
+function secToAss(sec) {
+  const s = Math.max(0, Number(sec) || 0);
+  const h = Math.floor(s / 3600);
+  const mi = Math.floor((s % 3600) / 60);
+  const se = Math.floor(s % 60);
+  const cs = Math.floor((s - Math.floor(s)) * 100);
+  return `${h}:${String(mi).padStart(2, '0')}:${String(se).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+/**
+ * Convert SRT ke ASS untuk burn.
+ * offsetSec: geser semua timestamp (clip mulai di 0, srt absolut) + buang cue di luar window.
+ * template: 'modern' | 'retro' | 'minimal' (default modern)
+ * refStyle: optional { subtitleColor, subtitlePosition } dari reference analysis
+ */
+function srtToAss(srtPath, assPath, offsetSec = 0, clipDur = null, template = 'modern', refStyle = null) {
+  const content = fs.readFileSync(srtPath, 'utf8').replace(/^\uFEFF/, '');
+  let tpl = getTemplate(template);
+  
+  // Override dari refStyle jika ada
+  if (refStyle) {
+    let style = tpl.style;
+    if (refStyle.subtitleColor) {
+      // Replace PrimaryColour: &H00FFFFFF -> refStyle color (BGR format ASS)
+      const hex = refStyle.subtitleColor.replace('#', '');
+      const r = parseInt(hex.slice(0,2), 16);
+      const g = parseInt(hex.slice(2,4), 16);
+      const b = parseInt(hex.slice(4,6), 16);
+      const bgr = `&H00${b.toString(16).padStart(2,'0').toUpperCase()}${g.toString(16).padStart(2,'0').toUpperCase()}${r.toString(16).padStart(2,'0').toUpperCase()}`;
+      style = style.replace(/PrimaryColour:\s*&H[0-9A-F]+/i, `PrimaryColour: ${bgr}`);
+    }
+    if (refStyle.subtitlePosition) {
+      // Alignment: bottom=2, top=8, center=5 (ASS numpad layout)
+      const align = refStyle.subtitlePosition === 'top' ? 8 : refStyle.subtitlePosition === 'center' ? 5 : 2;
+      style = style.replace(/Alignment:\s*\d+/, `Alignment: ${align}`);
+    }
+    tpl = { ...tpl, style };
+  }
+  
+  const assHeader = tpl.style;
+
+  const blocks = content.split(/\r?\n\r?\n/);
+  const events = [];
+  for (const b of blocks) {
+    const lines = b.split(/\r?\n/).filter((l) => l.trim() !== '');
+    if (lines.length < 2) continue;
+    const timeIdx = lines.findIndex((l) => l.includes('-->'));
+    if (timeIdx === -1) continue;
+    const tm = lines[timeIdx].match(/([\d:,.]+)\s*-->\s*([\d:,.]+)/);
+    if (!tm) continue;
+
+    let startSec = parseSrtSec(tm[1]) - offsetSec;
+    let endSec = parseSrtSec(tm[2]) - offsetSec;
+    if (endSec <= 0) continue;                                  // sebelum clip
+    if (clipDur != null && startSec >= clipDur) continue;        // setelah clip
+    startSec = Math.max(0, startSec);
+    if (clipDur != null) endSec = Math.min(endSec, clipDur);
+    if (endSec <= startSec) continue;
+
+    const text = lines.slice(timeIdx + 1).join('\\N').replace(/[{}]/g, '').trim();
+    if (!text) continue;
+    events.push(`Dialogue: 0,${secToAss(startSec)},${secToAss(endSec)},Default,,0,0,0,,${text}`);
+  }
+
+  fs.writeFileSync(assPath, assHeader + events.join('\n') + '\n');
+  return events.length;
+}
+
+function parseSrtSec(t) {
+  const m = String(t).trim().match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10) + parseInt(m[4], 10) / 1000;
+}
+
+function processClip({ ffmpegPath, videoPath, output, start, end, format, srtPath, reactionVideoPath, subtitleTemplate = 'modern', refStyle = null, enableTransitions = true }) {
+  return new Promise((resolve, reject) => {
+    const jobDir = path.dirname(videoPath);
+    const startSec = Number(start) || 0;
+    const endSec = Number(end) || 0;
+    const clipDur = Math.max(0, endSec - startSec);
+    const hasReaction = reactionVideoPath && fs.existsSync(reactionVideoPath);
+    
+    let subtitleBurnInfo = null;
+
+    // ffmpeg -ss sebelum -i = input seeking: audio+video seek bareng.
+    // Timestamp output mulai 0, jadi offset subtitle = startSec.
+    const args = ['-y', '-ss', String(startSec), '-t', String(clipDur), '-i', videoPath];
+    if (hasReaction) {
+      args.push('-ss', '0', '-t', String(clipDur), '-i', reactionVideoPath);
+    }
+
+    const vf = [];
+    if (format === '9:16_reaction') {
+      // Split-screen reaction: main video top 60%, reaction cam bottom 40%
+      // Top: scale main ke 1080x1080 center-crop, pad ke 1080x1152
+      // Bottom: scale reaction ke 1080x768 center-crop
+      // Gabung vertically → 1080x1920
+      if (hasReaction) {
+        args.push('-filter_complex',
+          '[0:v]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080[main];' +
+          '[1:v]scale=1080:768:force_original_aspect_ratio=increase,crop=1080:768[react];' +
+          '[main][react]vstack=inputs=2[outv]',
+        );
+        args.push('-map', '[outv]', '-map', '0:a');
+      } else {
+        // Tanpa reaction video: main di atas 60%, area gelap bawah (placeholder)
+        vf.push('scale=1080:1080:force_original_aspect_ratio=increase');
+        vf.push('crop=1080:1080:(iw-1080)/2:(ih-1080)/2');
+        vf.push('pad=1080:1920:0:0:black');
+      }
+    } else if (format === '9:16') {
+      vf.push('scale=1080:1920:force_original_aspect_ratio=increase');
+      vf.push('crop=1080:1920:(iw-1080)/2:(ih-1920)/2');
+    } else if (format === '1:1') {
+      vf.push('scale=1080:1080:force_original_aspect_ratio=increase');
+      vf.push('crop=1080:1080:(iw-1080)/2:(ih-1080)/2');
+    } else {
+      vf.push('scale=1280:720:force_original_aspect_ratio=decrease');
+    }
+
+    // Subtitle burn (skip untuk split-screen reaction — subtitle di input[0] aja)
+    // Make srtPath absolute jika relative
+    const srtPathAbs = srtPath && !path.isAbsolute(srtPath) ? path.join(jobDir, srtPath) : srtPath;
+    const useSub = srtPathAbs && fs.existsSync(srtPathAbs) && format !== '9:16_reaction';
+    console.log(`[ffmpeg] srtPath=${srtPath}, abs=${srtPathAbs}, exists=${useSub}, format=${format}`);
+    if (useSub) {
+      const assPath = path.join(jobDir, 'clip.ass');
+      try {
+        const n = srtToAss(srtPathAbs, assPath, startSec, clipDur, subtitleTemplate, refStyle);
+        if (n > 0) {
+          const assEsc = assPath.replace(/\\\\/g, '/').replace(/:/g, '\\\\:').replace(/'/g, "'");
+          vf.push(`subtitles='${assEsc}'`);
+          console.log(`[ffmpeg] subtitle burn: ${n} cue (offset ${startSec}s) template=${subtitleTemplate}`);
+          subtitleBurnInfo = { cueCount: n, offset: startSec, template: subtitleTemplate };
+        } else {
+          console.warn(`[ffmpeg] no cue dalam window ${startSec}-${endSec}s, skip subtitle`);
+        }
+      } catch (e) {
+        console.warn(`[ffmpeg] srtToAss gagal: ${e.message}`);
+      }
+    }
+
+    // Transitions: fade in/out
+    if (enableTransitions && clipDur > 1) {
+      vf.push('fade=t=in:st=0:d=0.3');
+      const fadeOutStart = Math.max(0, clipDur - 0.3);
+      vf.push(`fade=t=out:st=${fadeOutStart}:d=0.3`);
+      console.log(`[ffmpeg] transitions enabled: fade in/out (${clipDur}s clip)`);
+    }
+
+    if (format === '9:16_reaction' && hasReaction) {
+      // filter_complex sudah handle; jangan push vf biasa
+    } else {
+      args.push('-vf', vf.join(','));
+    }
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28');
+    args.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-pix_fmt', 'yuv420p');
+    args.push(output);
+
+    const proc = spawn(ffmpegPath || 'ffmpeg', args);
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', (e) => reject(new Error(`FFmpeg spawn error: ${e.message}`)));
+    proc.on('close', (code) => {
+      if (code !== 0) reject(new Error(`FFmpeg clip gagal (exit ${code}): ${stderr.slice(-1200)}`));
+      else resolve({ output, subtitleBurn: subtitleBurnInfo });
+    });
+  });
+}
+
+module.exports = { processClip, srtToAss, secToAss, parseSrtSec };

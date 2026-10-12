@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+backend/jobs/
+backend/uploads/
+backend/models/
+*.log
+*.err.log
+*.out.log
+testupload.mp4
+backend/id
+backend/run.bat
+.env
+.env.local
+.DS_Store
+frontend/next_dev.log
+frontend/next_err.log
