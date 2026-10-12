@@ -10,10 +10,13 @@ export type JobStatus =
 
 export interface JobOptions {
   clipCount: number;
-  targetDuration: number;
+  targetDuration?: number;
   formats: ClipFormat[];
+  formatMode?: "auto" | "custom";
   subtitleLang: string;
   includeSubtitles: boolean;
+  subtitleTemplate?: string;
+  refId?: string | null;
 }
 
 export type ClipFormat = "9:16" | "1:1" | "16:9" | "9:16_fill" | "9:16_split" | "16:9_fill";
