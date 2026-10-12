@@ -16,7 +16,7 @@ export interface JobOptions {
   includeSubtitles: boolean;
 }
 
-export type ClipFormat = "9:16" | "1:1" | "16:9";
+export type ClipFormat = "9:16" | "1:1" | "16:9" | "9:16_fill" | "9:16_split" | "16:9_fill";
 
 export interface Clip {
   id: string;

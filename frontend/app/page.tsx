@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createJob, createUploadJob, getJob, type JobMeta } from "@/lib/api";
+import { createJob, createUploadJob, getJob, type JobMeta, type JobOptions } from "@/lib/api";
 import { ClipCard } from "@/components/ClipCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import { Hero } from "@/components/Hero";
@@ -58,7 +58,7 @@ export default function Home() {
     if (mode === "upload" && !file) return setError("Pilih file video dulu!");
     setLoading(true);
     try {
-      const opts = { clipCount: 5, formats: [fmtMode === "custom" ? customFmt : "9:16"] as const, formatMode: fmtMode, subtitleLang: "id", includeSubtitles: true, subtitleTemplate: subTpl, refId };
+      const opts: Partial<JobOptions> = { clipCount: 5, formats: [fmtMode === "custom" ? customFmt : "9:16"], formatMode: fmtMode, subtitleLang: "id", includeSubtitles: true, subtitleTemplate: subTpl, refId };
       const res = mode === "upload"
         ? await createUploadJob({ file: file!, brief: brief.trim() || undefined, options: opts })
         : await createJob({ url: url.trim(), brief: brief.trim() || undefined, options: opts });
