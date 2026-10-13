@@ -15,3 +15,5 @@ backend/run.bat
 .DS_Store
 frontend/next_dev.log
 frontend/next_err.log
+# manager
+start-all.js
