@@ -1301,35 +1301,52 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           // kena sample 547.0 (shot cut wide 2-org, cx 0.348) → bucket 0.34
           // open 0.029 menang → crop kiri → wajah asli kepotong KANAN.
           const buckets = {};
-          for (const d of inSeg) for (const f of (d.faces || [])) {
-            // ponytail v21: threshold 0.82 membuang wajah ORANG BAWAH/DUDUK
-            // (job wanita duduk agak rendah cy 0.85 → wajah kepotong). Naikkan ke 0.90
-            // agar wajah di bagian bawah tetap terdeteksi dengan aman.
-            if (f.cy > 0.90) continue;
-            const k = Math.round(f.cx / 0.12) * 0.12;
-            if (!buckets[k]) buckets[k] = { cxs: [], mx: 0, n: 0 };
-            buckets[k].cxs.push(f.cx);
-            buckets[k].mx = Math.max(buckets[k].mx, f.open);
-            buckets[k].n++;
-          }
-          const anchor = Object.values(buckets)
-            .filter(b => b.n >= 2)          // persist: ≥2 sample = wajah asli
-            .map(b => ({ cx: b.cxs.sort((a, c) => a - c)[Math.floor(b.cxs.length / 2)],
-                         mx: b.mx, n: b.n }))
-            .sort((a, b) => b.mx - a.mx);   // open tertinggi dulu
-          const opens = anchor.map(a => a.mx);
-          // fallback: semua bucket <2 sample (segmen sangat pendek) →
-          // jangan buang, tetap pakai sample tunggal.
-          let anchorF = anchor;
-          if (!anchorF.length) {
-            anchorF = Object.values(buckets)
-              .map(b => ({ cx: b.cxs[0], mx: b.mx, n: 1 }))
-              .sort((a, b) => b.mx - a.mx);
-          }
-          const nAct = anchorF.map(a => a.mx).filter(o => o >= ACT).length;
-          s.anchorN = anchorF.length;  // wajah persisten = org asli (3 panel)
-          const wasMulti = s.multi;
-          s.multi = wasMulti && nAct >= 2;
+                    for (const d of inSeg) for (const f of (d.faces || [])) {
+                      // ponytail v21: threshold 0.82 membuang wajah ORANG BAWAH/DUDUK
+                      // (job wanita duduk agak rendah cy 0.85 → wajah kepotong). Naikkan ke 0.90
+                      // agar wajah di bagian bawah tetap terdeteksi dengan aman.
+                      if (f.cy > 0.90) continue;
+                      const k = Math.round(f.cx / 0.12) * 0.12;
+                      if (!buckets[k]) buckets[k] = { cxs: [], opens: [], mx: 0, n: 0 };
+                      buckets[k].cxs.push(f.cx);
+                      buckets[k].opens.push(f.open || 0);
+                      buckets[k].mx = Math.max(buckets[k].mx, f.open);
+                      buckets[k].n++;
+                    }
+                    // BICARA PERSISTEN vs REAKSI SEKEJAP: hitung berapa SAMPLE mulut
+                    // buka (>= ACT), bukan cuma max. Listener yang sekali ketawa
+                    // (1 sample mx 0.03) BUKAN pembicara; pembicara asli buka mulut
+                    // berkali-kali (nOpen >= 2). User: "cuma 1 orang ngomong tapi
+                    // split 2 layer, ga ada ekspresi apapun".
+                    const annotate = b => ({
+                      cx: b.cxs.sort((a, c) => a - c)[Math.floor(b.cxs.length / 2)],
+                      mx: b.mx, n: b.n,
+                      nOpen: b.opens.filter(o => o >= ACT).length,
+                    });
+                    const anchor = Object.values(buckets)
+                      .filter(b => b.n >= 2)          // persist: ≥2 sample = wajah asli
+                      .map(annotate)
+                      // PEMBICARA = nOpen tertinggi (paling sering buka mulut), tiebreak mx.
+                      .sort((a, b) => (b.nOpen - a.nOpen) || (b.mx - a.mx));
+                    const opens = anchor.map(a => a.mx);
+                    // fallback: semua bucket <2 sample (segmen sangat pendek) →
+                    // jangan buang, tetap pakai sample tunggal.
+                    let anchorF = anchor;
+                    if (!anchorF.length) {
+                      anchorF = Object.values(buckets)
+                        .map(b => annotate({ ...b, n: 1 }))
+                        .sort((a, b) => (b.nOpen - a.nOpen) || (b.mx - a.mx));
+                    }
+                    // SPLIT hanya kalau 2+ orang BICARA PERSISTEN (nOpen>=2 masing2),
+                    // bukan 1 pembicara + 1 listener yang kebetulan bereaksi sekejap.
+                    const nAct = anchorF.filter(a => a.nOpen >= 2).length;
+                    const nActLoose = anchorF.filter(a => a.mx >= ACT).length;
+                    s.anchorN = anchorF.length;  // wajah persisten = org asli (3 panel)
+                    const wasMulti = s.multi;
+                    // Multi kalau 2+ pembicara persist; ATAU 1 pembicara + 1 reaksi
+                    // kuat (mx tinggi DAN nOpen>=1 = ekspresif/ketawa nyata, bukan noise).
+                    const strongReaction = anchorF.filter(a => a.mx >= 0.030 && a.nOpen >= 1).length;
+                    s.multi = wasMulti && (nAct >= 2 || (nAct >= 1 && strongReaction >= 2));
           // cx pembicara SOLO = cluster open tertinggi (pan/crop ke dia).
           // SOLO/ JEDA: tetap set spk_cx ke wajah open-tertinggi WALAU
           // < ACT. Speaker bukaan mulut kecil (c5 buzzcut open 0.017 di
