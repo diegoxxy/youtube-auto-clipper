@@ -2232,12 +2232,16 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
         });
         g += ';' + outs.map(o => `[${o}]`).join('') +
           `concat=n=${outs.length}:v=1:a=0[base]`;
-        // SUBTITLE POSISI: 2-panel (seam y=960) → MarginV 930 = di tengah
-        // persis (48%). 3-panel (panel tengah 640-1280) → "tengah lower"
-        // y≈1200 → MarginV 700 (subs di bawah panel tengah, tetep layout tengah, turun dikit).
-        // v22e: 770→700 (user: "subtitle 3-panel diturunin dikit").
-        const maxPanels = shots.reduce((m, s) => Math.max(m, s.multi && s.anchorN ? Math.min(3, s.anchorN) : (s.multi ? 2 : 1)), 1);
-        const marginV = maxPanels >= 3 ? 700 : 930;
+        // SUBTITLE POSISI: 2-panel (seam y=960) → MarginV 880 = nempel
+                // seam tapi turun dikit (v22g: 930→880 — 930 bikin text nutup
+                // puncak panel bawah, wajah panel bawah sering di 1000-1200).
+                // 3-panel (panel tengah 640-1280) → MarginV 640 = bawah panel
+                        // tengah, aman dari wajah panel tengah (center ~960±150).
+                        // v22e: 770→700, v22g: 700→640 (user: "masih ada yang nutup wajah").
+                        // v22h: solo 1-panel → 750 (880 = text y≈960 nutup dagu
+                        // close-up; 750 = text y≈1090 = bawah dagu, aman).
+                        const maxPanels = shots.reduce((m, s) => Math.max(m, s.multi && s.anchorN ? Math.min(3, s.anchorN) : (s.multi ? 2 : 1)), 1);
+                        const marginV = maxPanels >= 3 ? 640 : (maxPanels === 2 ? 880 : 750);
         const subsFx = tailFx.find(f => f.startsWith('subtitles='));
         if (subsFx) {
           const assF = subsFx.replace(/^subtitles=/, '');
@@ -2255,10 +2259,12 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
       // aja"). ASS MarginV default (bottom-anchored) jatuh di panel terakhir
       // → override ke tengah frame: margin_v = (1920/2) - textHeight/2.
       // pakai force_style di filter subs (header ASLI ga diubah permanen).
+      // v22h: 930→750 (user: "masih ada yang nutup wajah solo 1 panel";
+      // 930 = 48% tinggi, 750 = 39% tinggi = aman di bawah dagu podcast).
       const subsFx = tailFx.find(f => f.startsWith('subtitles='));
       if (subsFx) {
         const assF = subsFx.replace(/^subtitles=/, '');
-        const midFx = `subtitles=${assF}:force_style='MarginV=930'`;
+        const midFx = `subtitles=${assF}:force_style='MarginV=750'`;
         const restFx = tailFx.filter(f => !f.startsWith('subtitles='));
         splitGraph += `;[base]${restFx.length ? restFx.join(',') + ',' : ''}${midFx}[out]`;
       } else {
