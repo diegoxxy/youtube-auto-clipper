@@ -16,4 +16,4 @@ backend/run.bat
 frontend/next_dev.log
 frontend/next_err.log
 # manager
-start-all.js
+

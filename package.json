@@ -1,0 +1,18 @@
+{
+  "name": "youtube-auto-clipper",
+  "version": "2.0.0",
+  "description": "AI-powered vertical video clipper — offline desktop app",
+  "main": "start-all.js",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node start-all.js",
+    "dev": "node start-all.js"
+  },
+  "keywords": ["youtube", "clipper", "ai", "vertical-video", "desktop-app"],
+  "author": "YouTube Auto-Clipper",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/diegoxxy/youtube-auto-clipper.git"
+  }
+}
