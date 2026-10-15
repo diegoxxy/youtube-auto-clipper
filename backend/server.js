@@ -86,6 +86,34 @@ function runSkill(skillName, scriptName, args = []) {
 const JOBS_DIR = path.join(__dirname, 'jobs');
 const UPLOAD_TMP = path.join(JOBS_DIR, '_uploads');
 fs.mkdirSync(UPLOAD_TMP, { recursive: true });
+
+// Startup scan: re-queue job queued/clipping (process.exit/restart kill in-memory queue)
+function scanAndRequeueStuckJobs() {
+  try {
+    const dirs = fs.readdirSync(JOBS_DIR).filter(d => 
+      fs.statSync(path.join(JOBS_DIR, d)).isDirectory()
+    );
+    let count = 0;
+    for (const dir of dirs) {
+      const metaPath = path.join(JOBS_DIR, dir, 'metadata.json');
+      if (!fs.existsSync(metaPath)) continue;
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        if ((meta.status === 'queued' || meta.status === 'clipping') && meta.progress < 100) {
+          console.log(`[boot] re-queue ${dir} status=${meta.status} progress=${meta.progress}%`);
+          enqueueJob(() => processJob(dir), dir);
+          count++;
+        }
+      } catch (e) {
+        console.warn(`[boot] skip ${dir}: ${e.message}`);
+      }
+    }
+    console.log(`[boot] re-queued ${count} job(s)`);
+  } catch (e) {
+    console.warn('[boot] scanAndRequeueStuckJobs error:', e.message);
+  }
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (r, f, cb) => cb(null, UPLOAD_TMP),
@@ -124,9 +152,16 @@ function readMetadata(jobId) {
 function updateJob(jobId, patch) {
   const meta = readMetadata(jobId);
   if (!meta) return null;
-  const next = { ...meta, ...patch, updatedAt: new Date().toISOString() };
-  writeMetadata(path.join(JOBS_DIR, jobId), next);
-  return next;
+  // track _lastProgressUpdate buat stuck detection
+  const now = new Date().toISOString();
+  const updated = { 
+    ...meta, 
+    ...patch, 
+    updatedAt: now,
+    _lastProgressUpdate: patch.progress !== undefined ? now : meta._lastProgressUpdate
+  };
+  writeMetadata(path.join(JOBS_DIR, jobId), updated);
+  return updated;
 }
 function isValidYouTubeUrl(url) { return validateFs.isValidYouTubeUrl(url); }
 
@@ -163,6 +198,36 @@ async function buildReferenceStyle({ meta0, jobDir, warnings }) {
 }
 
 // Background runner — T-03..T-08 real
+// JOB QUEUE: render video = CPU-bound, low-spec machine. Job sebelumnya selesai
+// dulu sebelum mulai job baru (user: 3 job paralel bikin semua lemot & "lama").
+let jobQueue = Promise.resolve();
+let queuedJobs = []; // track antrian, buat position info
+function enqueueJob(fn, jobId) {
+  if (jobId) queuedJobs.push(jobId);
+  const next = jobQueue.then(() => {
+    if (jobId) queuedJobs = queuedJobs.filter(j => j !== jobId);
+    return fn();
+  });
+  jobQueue = next.catch(() => {});
+  // update queue position untuk semua job di queue
+  if (jobId) {
+    for (const jid of queuedJobs) {
+      const pos = queuedJobs.indexOf(jid) + 1;
+      try {
+        const meta = readMetadata(jid);
+        if (meta && meta.status === 'queued') {
+          updateJob(jid, { 
+            _queuePos: pos,
+            _queueWait: Math.ceil(pos * 15), // ~15 menit per job
+            _lastProgressUpdate: new Date().toISOString()
+          });
+        }
+      } catch {}
+    }
+  }
+  return next;
+}
+
 async function processJob(jobId) {
   const jobDir = path.join(JOBS_DIR, jobId);
   const meta0 = readMetadata(jobId);
@@ -173,8 +238,16 @@ async function processJob(jobId) {
   let clips = [];
   try {
     updateJob(jobId, { status: 'downloading', progress: 5 });
-    const url = meta0.url;
-    if (meta0.source === 'upload' && meta0.uploadedPath && fs.existsSync(meta0.uploadedPath)) {
+        const url = meta0.url;
+        // RESUME: raw sudah ada di jobDir (restart di tengah render) → skip download.
+        const existingRaw = ['raw.mp4', 'raw.webm', 'raw.mkv', 'raw.mov'].map(f => path.join(jobDir, f)).find(f => fs.existsSync(f));
+        if (existingRaw && meta0.videoPath === existingRaw) {
+          videoPath = existingRaw;
+          videoInfo = meta0.videoInfo || { id: 'raw', title: 'video', duration: probeDuration(existingRaw) };
+          warningsDownload = ['Resume: pakai video yang sudah ada (skip download)'];
+          updateJob(jobId, { videoInfo, videoPath, progress: 15 });
+          console.log(`[jobs] ${jobId} RESUME pakai raw existing -> ${existingRaw}`);
+        } else if (meta0.source === 'upload' && meta0.uploadedPath && fs.existsSync(meta0.uploadedPath)) {
       // Upload: skip download, pindah file ke jobDir lalu hapus tmp
       const ext = path.extname(meta0.uploadedPath) || '.mp4';
       const dest = path.join(jobDir, `raw${ext}`);
@@ -407,8 +480,9 @@ async function processJob(jobId) {
       return { ...c, file: primaryFile, files: filesByFormat, subtitleBurn: subtitleBurnPerClip };
     };
 
-    // pool sederhana: max 2 clip jalan bareng (4-core low-spec: 2 worker + OS + YuNet face detect)
-    const CONC = 2;
+    // pool SERIAL: low-spec CPU — 1 clip render = 1 core penuh (user: "cpu 100% ffmpeg gabisa diturunin?").
+    // CONC 2 + 3 job bareng = 6 core jebol. Render = CPU-bound, paralel cuma nambah total waktu.
+    const CONC = 1;
     const results = new Array(clips.length);
     let nextIdx = 0;
     let doneCount = 0;
@@ -418,13 +492,29 @@ async function processJob(jobId) {
         if (i >= clips.length) break;
         results[i] = await renderOneClip(clips[i]);
         doneCount++;
-        updateJob(jobId, { progress: 78 + Math.round((doneCount / clips.length) * 17), warnings: [...warningsDownload, ...transcriptWarnings, ...aiWarnings] });
+        // tulis files per-clip ke metadata → UI bisa hitung "2/5 klip selesai".
+        const partial = results.filter(Boolean);
+        updateJob(jobId, {
+          progress: 78 + Math.round((doneCount / clips.length) * 17),
+          clips: partial,
+          warnings: [...warningsDownload, ...transcriptWarnings, ...aiWarnings],
+        });
       }
     });
     await Promise.all(workers);
     const clipsWithFiles = results.filter(Boolean);
 
     updateJob(jobId, { status: 'done', progress: 100, clips: clipsWithFiles, warnings: [...warningsDownload, ...transcriptWarnings, ...aiWarnings] });
+    // ponytail: raw.mp4 sudah di-render jadi clips + ada di _cache/{videoId}.mp4.
+    // Hapus dari jobDir biar ga makan disk space (1.4GB per job). Output final cuma clips.
+    const rawPath = path.join(JOBS_DIR, jobId, 'raw.mp4');
+    if (fs.existsSync(rawPath)) {
+      try {
+        const rawSizeMB = Math.round(fs.statSync(rawPath).size / 1e6);
+        fs.unlinkSync(rawPath);
+        console.log(`[jobs] ${jobId} cleanup raw.mp4 (${rawSizeMB}MB freed)`);
+      } catch (e) { console.warn(`[jobs] ${jobId} cleanup raw.mp4 gagal: ${e.message}`); }
+    }
     console.log(`[perf] ${jobId} render ${clipsWithFiles.length} clips ${((Date.now() - _t3) / 1000).toFixed(1)}s (paralel x${Math.min(CONC, clips.length)})`);
     console.log(`[jobs] ${jobId} done — ${clipsWithFiles.length} clips`);
   } catch (err) {
@@ -484,7 +574,7 @@ app.post('/api/jobs/upload', uploadVideo, (req, res) => {
     };
     writeMetadata(jobDir, metadata);
     console.log(`[jobs] queued upload ${jobId} file=${originalName} size=${req.file.size}`);
-    setImmediate(() => processJob(jobId).catch((e) => console.error(e)));
+    setImmediate(() => enqueueJob(() => processJob(jobId), jobId).catch((e) => console.error(e)));
     return res.status(201).json({ jobId, status: 'queued', progress: 0 });
   } catch (err) {
     console.error('POST /api/jobs/upload error:', err);
@@ -503,7 +593,7 @@ app.post('/api/jobs', async (req, res) => {
     const clipCount = Math.min(10, Math.max(1, parseInt(options.clipCount, 10) || 5));
     const targetDuration = Math.min(180, Math.max(15, parseInt(options.targetDuration, 10) || 60));
     let formats = Array.isArray(options.formats) && options.formats.length ? options.formats : ['9:16'];
-    formats = formats.filter((f) => ['9:16', '1:1', '16:9', '9:16_reaction', '9:16_fill', '9:16_split', '16:9_fill'].includes(f));
+    formats = formats.filter((f) => ['9:16', '1:1', '16:9', '9:16_reaction', '9:16_fill', '9:16_split', '16:9_fill', 'adaptive'].includes(f));
     if (!formats.length) formats = ['9:16'];
     const formatMode = String(options.formatMode || 'auto').toLowerCase() === 'custom' ? 'custom' : 'auto';
 
@@ -522,8 +612,8 @@ app.post('/api/jobs', async (req, res) => {
     };
     writeMetadata(jobDir, metadata);
     console.log(`[jobs] queued ${jobId} brief=${briefVal.brief ? briefVal.brief.slice(0, 40) : '-'} clipCount=${clipCount} formats=${formats.join(',')}`);
-    setImmediate(() => processJob(jobId).catch((e) => console.error(e)));
-    return res.status(201).json({ jobId, status: 'queued', progress: 0 });
+        setImmediate(() => enqueueJob(() => processJob(jobId), jobId).catch((e) => console.error(e)));
+        return res.status(201).json({ jobId, status: 'queued', progress: 0 });
   } catch (err) {
     console.error('POST /api/jobs error:', err);
     return res.status(500).json({ error: 'Gagal membuat job: ' + (err.message || String(err)) });
@@ -541,6 +631,57 @@ app.get('/api/jobs/:id', (req, res) => {
   const meta = readMetadata(req.params.id);
   if (!meta) return res.status(404).json({ error: 'Job not found' });
   return res.json(meta);
+});
+
+app.get('/api/jobs/:id/logs', (req, res) => {
+  const jobId = req.params.id;
+  const jobDir = path.join(JOBS_DIR, jobId);
+  if (!fs.existsSync(jobDir)) return res.status(404).json({ error: 'Job not found' });
+  
+  // Kumpulkan log dari console.log backend yang mention jobId
+  // ponytail: log per-job ga di-split ke file terpisah (overhead I/O low-spec).
+  // Scan dinamis semua be*.log (backend ganti nama per restart beD/beE/...beZ).
+  const tmpDir = path.join(process.env.LOCALAPPDATA || process.env.TEMP, 'Temp');
+  const logFiles = (() => {
+    try {
+      return fs.readdirSync(tmpDir)
+        .filter(f => /^be[A-Z]?\.log$/.test(f) || /^backend.*\.log$/.test(f))
+        .map(f => path.join(tmpDir, f))
+        .filter(f => fs.existsSync(f) && fs.statSync(f).size > 0)
+        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs) // terbaru dulu
+        .slice(0, 5);
+    } catch { return []; }
+  })();
+  
+  const lines = [];
+  const limit = parseInt(req.query.limit) || 200;
+
+  // urut kronologis: file LAMA dulu → BARU terakhir
+  // PENTING: baca TAIL 256KB saja (jangan full read — log MB-an block
+  // event loop → semua request /health timeout saat render jalan).
+  const TAIL = 262144;
+  const readTail = (p, max) => {
+    const fd = fs.openSync(p, 'r');
+    try {
+      const size = fs.fstatSync(fd).size;
+      const start = Math.max(0, size - max);
+      const buf = Buffer.alloc(size - start);
+      fs.readSync(fd, buf, 0, buf.length, start);
+      return buf.toString('utf8');
+    } finally { fs.closeSync(fd); }
+  };
+  for (const logPath of [...logFiles].reverse()) {
+    try {
+      const content = readTail(logPath, TAIL);
+      // PENTING: grep jobId FULL, jangan slice(0,8) (tabel log beN.log mencatat UUID full).
+      const jobLines = content.split('\n').filter(l => l.includes(jobId));
+      lines.push(...jobLines.slice(-limit));
+    } catch {}
+  }
+  
+  // Dedupe + sort by timestamp heuristic (line order)
+  const unique = [...new Set(lines)].slice(-limit);
+  return res.json({ jobId, lines: unique, count: unique.length });
 });
 
 app.get('/api/subtitle-templates', (req, res) => {
@@ -642,6 +783,29 @@ app.get('/api/references/:refId', (req, res) => {
   return res.json(meta);
 });
 
+// CANCEL job: mark failed, stop worker
+app.post('/api/jobs/:id/cancel', (req, res) => {
+  const jobId = req.params.id;
+  const meta = readMetadata(jobId);
+  if (!meta) return res.status(404).json({ error: 'Job not found' });
+  if (['done', 'failed'].includes(meta.status)) return res.status(400).json({ error: 'Job sudah selesai/failed' });
+  
+  // Mark job failed
+  meta.status = 'failed';
+  meta.error = 'Cancelled by user';
+  meta.updatedAt = new Date().toISOString();
+  try {
+    const metaPath = path.join(JOBS_DIR, jobId, 'metadata.json');
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    // Remove dari queue
+    queuedJobs = queuedJobs.filter(j => j !== jobId);
+    console.log(`[jobs] ${jobId} CANCELLED by user`);
+    return res.json({ status: 'cancelled', jobId });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve static frontend AFTER API routes
 app.use(express.static(path.join(__dirname, '../frontend')));
 
@@ -657,6 +821,7 @@ app.get('/api/jobs/:id/stream', (req, res) => {
   const fileName = clip.files?.[fmt] || clip.file || `c${String(clipId).replace(/^c/, '')}_${safeFmt}.mp4`;
   const filePath = path.join(JOBS_DIR, req.params.id, 'clips', fileName);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not ready yet', fileName });
+  // preview player butuh inline; judul filename di-handle via download attr di frontend.
   // support range via sendFile
   return res.sendFile(path.resolve(filePath));
 });
@@ -1140,10 +1305,13 @@ app.get('/api/jobs/:id/download', (req, res) => {
   const clip = (meta.clips || []).find((c) => String(c.id) === String(clipId));
   if (!clip) return res.status(404).json({ error: 'Clip not found' });
   const safeFmt = String(fmt).replace(':', '-').replace(':', '_');
-  const fileName = clip.files?.[fmt] || clip.file || `c${String(clipId).replace(/^c/, '')}_${safeFmt}.mp4`;
-  const filePath = path.join(JOBS_DIR, req.params.id, 'clips', fileName);
+  const diskFile = clip.files?.[fmt] || clip.file || `c${String(clipId).replace(/^c/, '')}_${safeFmt}.mp4`;
+  const filePath = path.join(JOBS_DIR, req.params.id, 'clips', diskFile);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not ready yet' });
-  return res.download(filePath, fileName);
+  // Download filename: "Title Clip - 13m47s-14m32s.mp4" (user: "gw mau sesuai dengan judul clipnya")
+  const fmtSec = (s) => { const m=Math.floor(s/60); const sec=Math.floor(s%60); return `${m}m${sec.toString().padStart(2,'0')}s`; };
+  const downloadName = `${(clip.title || 'Clip').replace(/[<>:"/\\|?*]/g, '_')} - ${fmtSec(clip.start)}-${fmtSec(clip.end ?? clip.start + 30)}.mp4`;
+  return res.download(filePath, downloadName);
 });
 
 // Legacy single-clip — DEPRECATED
@@ -1207,6 +1375,8 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3010;
+// Startup: scan & re-queue stuck job
+setImmediate(() => scanAndRequeueStuckJobs());
 app.listen(PORT, () => console.log(`YouTube Auto-Clipper API running on port ${PORT}`));
 
 module.exports = app;

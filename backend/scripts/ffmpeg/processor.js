@@ -222,7 +222,8 @@ function srtToAss(srtPath, assPath, offsetSec = 0, clipDur = null, template = 'b
       }
       // Base cue (layer 0): FULL TEXT PUTIH solid (bukan PrimaryColour template
       // — kalau base ikut warna template, highlight kuning di atasnya ga keliatan).
-      let baseText = `{\\c&H00FFFFFF&}${words.join(' ')}`;
+      // POP-UP: fade-in cepat 80ms + scale 90→100 (user: "subtitle dynamic/pop up").
+      let baseText = `{\\fad(80,0)\\fscx90\\fscy90\\t(0,120,\\fscx100\\fscy100)\\c&H00FFFFFF&}${words.join(' ')}`;
       if (UPPERCASE) baseText = upNoTags(baseText);
       pushEv(relativeStart, relativeEnd, baseText);
       // Highlight (layer 1): FULL TEXT di posisi SAMA (centered) —
@@ -581,10 +582,11 @@ function buildSplitGraph(faceCrop, srcW, srcH, panelFx, shotSamples) {
   // samping/belakang (YuNet tangkap punggung kepala) → cx beda tipis
   // tapi wajahnya sama. Split = mubazir (panel belakang kepala).
   // Hanya terima panel lain kalau cx-nya BENERAN beda (>0.10 = org lain)
-  // DAN muncul cukup sering (>= 25% frame utama, bukan orang lewat).
+  // DAN muncul cukup sering (>= 20% frame utama, bukan orang lewat).
+  // v22e: 0.14→0.10, 25%→20% (user: "3 orang ga ke-shoot semua").
   const others = byFreq.slice(1).filter(s =>
-    Math.abs((s.cx || 0) - (main.cx || 0)) > 0.14 &&
-    (s.n_frames || 0) >= Math.max(2, (main.n_frames || 4) * 0.25)
+    Math.abs((s.cx || 0) - (main.cx || 0)) > 0.10 &&
+    (s.n_frames || 0) >= Math.max(2, (main.n_frames || 4) * 0.20)
   ).sort((a, b) => a.cx - b.cx);
   const picked = [main, ...others].slice(0, 3);
   const n = picked.length;
@@ -593,15 +595,17 @@ function buildSplitGraph(faceCrop, srcW, srcH, panelFx, shotSamples) {
   // Panel 1080xpanelH. n=2 → 1080x960 (rasio 1.125, LANDSCAPE-ish).
   // Crop source per-wajah harus SAMA rasio (bukan 9:16) supaya ga
   // distorsi: zW = zH * (1080/panelH). Tinggi crop di source = srcH/n.
-  // ZOOM IN 1.25x: panel split (n=2 → 1080x960) = wajah muncul KECIL
+  // ZOOM IN 1.15x: panel split (n=2 → 1080x960) = wajah muncul KECIL
   // (~70px di 540px crop) karena kamera source wide. Tanpa zoom, muka
   // tak keliatan jelas. wajah besar tapi masih muat badan (zoom 1.8 = kepala
   // kepotong). zW/zH dikecilin = crop lebih dekat.
+  // v22e: 1.25→1.15 (user 2026-10-14: "zoom terlalu dekat"). 1.15 = wajah
+  // keliatan tapi badan juga, ga terlalu close-up.
   // ADAPTIVE: kalau wajah terbesar (faceW) > 55% zW, zoom out ke 1.0
   // (close-up 2 org deket kamera: wajah 0.48*srcW=922px > zW 486 = kepala
   // kepotong dgn zoom 1.25). Ponytail: shot wajah 1 org + wajah besar =
   // sudah di-guard closeUp di segShots (solo). Ini buat 2-org close.
-  const SPLIT_ZOOM_BASE = 1.25;
+  const SPLIT_ZOOM_BASE = 1.15;
     const panelRatio = 1080 / panelH;           // rasio panel (W/H)
     let zH = Math.round(Math.floor(srcH / n) / SPLIT_ZOOM_BASE);
     let zW = Math.round(zH * panelRatio);       // lebar crop = rasio sama dgn panel
@@ -1010,7 +1014,7 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
     let speakerPan = null;
     let speakerDominance = 0;  // fraction sample di pembicara terbanyak (0-1)
     let mmSp = [];             // mouth-motion per-cue: [{t,cx,speaker,nActive,faces}]
-    if (srtFinal && (format === '9:16' || format === '9:16_fill' || format === '9:16_split')) {
+    if (srtFinal && (format === '9:16' || format === '9:16_fill' || format === '9:16_split' || format === 'adaptive')) {
       try {
         const fc0 = computeFaceCrop(videoPath, 1080, 1920, startSec, endSec);
         if (fc0 && fc0.n_people >= 1) {
@@ -1058,6 +1062,20 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           }
         }
       } catch (e) { console.warn(`[ffmpeg] speaker detect: ${String(e.message).slice(0, 100)}`); }
+    }
+
+    // ADAPTIVE FORMAT: 1-2 org = talking head/split, 3+ org = band blur.
+    // User: "kalo 2 orang masih muat split screen, tapi 3+ orang langsung
+    // ganti band blur". Hitung face count max dari mouth-motion samples.
+    let maxFaces = 1;
+    if (format === 'adaptive') {
+      mmSp.forEach(d => {
+        if (d.faces && d.faces > maxFaces) maxFaces = d.faces;
+      });
+      // 1-2 org → 9:16 (talking head, auto-split kalau 2 speaker aktif)
+      // 3+ org → 9:16_fill (band blur, auto multi-panel kalau butuh)
+      format = maxFaces >= 3 ? '9:16_fill' : '9:16';
+      console.log(`[ffmpeg] ADAPTIVE resolve: max ${maxFaces} faces → ${format}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -1151,32 +1169,28 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
       // butuh split meski speaker-pan ada (pan cover segmen solo, split
       // cover segmen multi — branch MULTI-SHOT gabung keduanya).
       const segRatio = segMultiRatio || (faceCrop ? faceCrop.multi_ratio : 0) || 0;
-      // GATE = CONVERSATION TIMELINE (user 2026-09-29): split BUKAN per jumlah
-      // wajah di frame — 2 org di frame tapi cuma 1 ngomong = 1 panel fokus
-      // pembicara. Split cuma kalau 2+ org SAME-SAME aktif (reaksi ketawa /
-      // tabrakan ngomong). Sumber: mouth-motion nActive per cue.
-      // c2 279b5746: pria+wanita selalu di frame bareng (multi 94%) tapi
-      // bergantian ngomong → dominance 0.61 = 1-org dominan → NO split.
-      // nActive>=2 di >=25% cue = percakapan beneran → split.
+      // GATE = CONVERSATION TIMELINE: split BUKAN per jumlah wajah di frame
+      // saja. 2 org di frame tapi cuma 1 ngomong = per-SEGMEN gate nentuin
+      // solo-vs-split (mouth-motion activity line 1258+). Gate GLOBAL:
+      // konfirmasi ada ≥2 org BENERAN (shot_segments) + multi ratio cukup.
+      // convRatio/oneSpeaker TIDAK matiin split — per-segmen gate yang handle.
+      // User 2026-10-14: \"3 orang tapi cuma 1 panel → badan kepotong setengah,
+      // harusnya auto-split 3 panel biar muka semua keliatan\".
       const nAct = mmSp.filter(d => d.nActive >= 2).length;
       const convRatio = mmSp.length ? nAct / mmSp.length : 0;
       const segMaxFaces = thisSegs.reduce((m, s) => Math.max(m, s.faces || 1), 0);
-      const oneSpeaker = speakerDominance >= 0.60 && convRatio < 0.25;
-      // ponytail v18: shot_segments.py = SOURCE OF TRUTH buat jumlah org.
-      // computeFaceCrop multi_ratio sample YuNet window bisa false-positive
-      // (B-roll orang-dr-belakang, wajah 1 detik transitif) → n_people=2
-      // padahal tiap segmen cuma 1 org → classic splitGraph jalan & bikin
-      // 2 panel ORANG SAMA (job bc297bc4 c5: speakers cx 0.42 vs 0.52 Δ=0.10).
-      // Classic path HANYA kalau shot_segments konfirmasi ada segmen multi.
       const segConfirmsMulti = segMaxFaces >= 2;
+      // wantSplit = APAKAH PUNYA SEGMEN MULTI yang butuh split layout.
+      // Per-segmen gate (mouth-motion) nanti nentuin segmen mana yang split
+      // vs solo. Gate ini cuma: "punya orang ≥2 + ada segmen multi?"
       wantSplit = !!(splitFaces && (segConfirmsMulti || splitFaces.n_people >= 2) &&
-        !oneSpeaker && (convRatio >= 0.25 || segRatio > 0.05));
+        segRatio > 0.02);
       // shot_segments bilang 0 segmen multi (thisSegs ada & akurat) = video
       // solo / vlog cut-cepat → OFF classic split, pakai static/solo crop.
-      if (thisSegs.length && !segConfirmsMulti && convRatio < 0.25) {
+      if (thisSegs.length && !segConfirmsMulti) {
         wantSplit = false;
       }
-      console.log(`[ffmpeg] CONV: active2=${convRatio.toFixed(2)} dominance=${speakerDominance.toFixed(2)} oneSpeaker=${oneSpeaker} segMulti=${segConfirmsMulti} wantSplit=${wantSplit}`);
+      console.log(`[ffmpeg] CONV: active2=${convRatio.toFixed(2)} segMulti=${segConfirmsMulti} faces=${segMaxFaces} wantSplit=${wantSplit}`);
       // 9:16_split = FORCE split (user pilih manual "2 Kolom"): paksa
       // wantSplit + semua segmen multi=true (gate AI di-bypass).
       if (format === '9:16_split') {
@@ -1208,11 +1222,10 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           // B-roll = 2 panel adegan SAMA = pusing).
           const cxs = (s.cx || s.spk_cx || []);
           const noFace = !multi && cxs.length === 0;
-          // CLOSE-UP GUARD: wajah > 0.22*srcW (3 org lebar / 1 org deket
-          // kamera) = wajah > window panel split 486px → kepala kepotong.
-          // Job d7fce121 c1: segmen multi tapi wajah 0.48 → panel kepotong.
-          // Solo full-height crop = wajah utuh.
-          const closeUp = (s.wMax || 0) > 0.22;
+          // CLOSE-UP GUARD: jika 1 wajah terlalu besar (>0.32), itu bukan multi-shot
+          // tapi solo dekat kamera. Khusus scene 3+ orang (maxFaces>=3), jangan
+          // matikan split gara-gara closeUp, karena 3 orang butuh 3 panel.
+          const closeUp = (s.wMax || 0) > 0.32 && (maxFaces < 3);
           return { start: s.start, end: s.end,
                    multi: (noFace || closeUp) ? false : doSplit, rawMulti: multi,
                    wMax: s.wMax || 0,
@@ -1289,13 +1302,10 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           // open 0.029 menang → crop kiri → wajah asli kepotong KANAN.
           const buckets = {};
           for (const d of inSeg) for (const f of (d.faces || [])) {
-            // ponytail v21: threshold 0.6 membuang wajah ORANG BERDIRI
-            // (job 49f9ced2 c3 @226.9: 2 org di kitchen counter, wajah di
-            // cy 0.66-0.78 → semua kena filter → cyAll kosong → fallback
-            // 0.42 → crop kebawah → wajah kepotong ATAS, "kamera ngarah
-            // tengah ga ada muka"). Naikkan ke 0.82; proteksi false-positive
-            // (baju/mug) udah dijaga bucket persistensi n>=2 + anchor open.
-            if (f.cy > 0.82) continue;
+            // ponytail v21: threshold 0.82 membuang wajah ORANG BAWAH/DUDUK
+            // (job wanita duduk agak rendah cy 0.85 → wajah kepotong). Naikkan ke 0.90
+            // agar wajah di bagian bawah tetap terdeteksi dengan aman.
+            if (f.cy > 0.90) continue;
             const k = Math.round(f.cx / 0.12) * 0.12;
             if (!buckets[k]) buckets[k] = { cxs: [], mx: 0, n: 0 };
             buckets[k].cxs.push(f.cx);
@@ -1388,16 +1398,50 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           console.log(`[ffmpeg] SEG ${s.start.toFixed(1)}-${s.end.toFixed(1)} opens=[${anchorF.map(a => a.mx.toFixed(3)).join(',')}] cx=[${anchorF.map(a => a.cx.toFixed(2)).join(',')}] → ${s.multi ? 'SPLIT' : (nAct === 1 ? 'SOLO' : 'jeda')}` + (wasMulti !== s.multi ? ' (override)' : ''));
         });
       }
-      // GATE v12 OVERRIDE wantSplit: walau speakerDominance global 1 org,
-      // kalau ADA segmen dgn 2+ org aktif (reaction/tabrakan) = split hidup
-      // di segmen itu. User: "ganti ganti layout biar audiens paham topik
-      // dan pembicara".
-      if (segShots.some(s => s.multi)) {
-        wantSplit = !!(splitFaces && (segMaxFaces >= 2 || splitFaces.n_people >= 2));
-        if (wantSplit) faceCrop = null;
-        console.log(`[ffmpeg] v12: ${segShots.filter(s=>s.multi).length} segmen multi aktif → wantSplit=true`);
+      // ============ STABILISASI LAYOUT (anti-pusing) ============
+      // User: "ganti-gantinya cepet banget bikin pusing. Priority: orang
+      // yang keluar suara aja yang difokusin; ngomong di sela/ekspresif
+      // baru multi cam." Dua langkah:
+      // (1) DEMOTE: segmen SPLIT < 3.5s diapit SOLO = interupsi sesaat
+      //     → layout balik ke SOLO (jangan ganti layout demi 3 detik).
+      // (2) RE-MERGE: sisa segmen berurutan multi SAMA + cx serupa
+      //     digabung lagi (ACT gate bisa fragmentasi setelah merge awal).
+      {
+        const st = segShots;
+        for (let i = 0; i < st.length; i++) {
+          const s = st[i];
+          if (!s.multi) continue;
+          const dur = s.end - s.start;
+          const prevSolo = i > 0 && !st[i - 1].multi;
+          const nextSolo = i < st.length - 1 && !st[i + 1].multi;
+          if (dur < 3.5 && prevSolo && nextSolo) {
+            s.multi = false;
+            console.log(`[ffmpeg] DEMOTE ${s.start.toFixed(1)}-${s.end.toFixed(1)} split<3.5s diapit solo → SOLO (anti-flicker)`);
+          }
+        }
+        const merged2 = [];
+        for (const s of st) {
+          const prev = merged2[merged2.length - 1];
+          if (prev && prev.multi === s.multi) {
+            const a = (prev.spk_cx && prev.spk_cx.length) ? prev.spk_cx[0] : null;
+            const b = (s.spk_cx && s.spk_cx.length) ? s.spk_cx[0] : null;
+            const same = (a == null || b == null) || Math.abs(a - b) < 0.12;
+            if (same) {
+              prev.end = s.end;
+              if (Array.isArray(prev.track_cx) && Array.isArray(s.track_cx)) {
+                prev.track_cx = [...prev.track_cx, ...s.track_cx];
+              } else if (Array.isArray(s.track_cx)) prev.track_cx = [...s.track_cx];
+              prev.spk_cx = [...(prev.spk_cx || []), ...(s.spk_cx || [])];
+              continue;
+            }
+          }
+          merged2.push({ ...s });
+        }
+        if (merged2.length < st.length) {
+          console.log(`[ffmpeg] RE-MERGE pasca-gate: ${st.length} → ${merged2.length} layout`);
+        }
+        segShots = merged2;
       }
-
       shots = segShots;
       console.log(`[ffmpeg] SPLIT DEBUG n_people=${splitFaces.n_people} multi=${splitFaces.multi_ratio} speakers=${(splitFaces.speakers||[]).length} shots=${shots.length} graph=${splitGraph ? 'OK' : 'NULL'}`);
 
@@ -2173,9 +2217,10 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           `concat=n=${outs.length}:v=1:a=0[base]`;
         // SUBTITLE POSISI: 2-panel (seam y=960) → MarginV 930 = di tengah
         // persis (48%). 3-panel (panel tengah 640-1280) → "tengah lower"
-        // y≈1150 → MarginV 770 (subs di bawah panel tengah, ga nutup wajah).
+        // y≈1200 → MarginV 700 (subs di bawah panel tengah, tetep layout tengah, turun dikit).
+        // v22e: 770→700 (user: "subtitle 3-panel diturunin dikit").
         const maxPanels = shots.reduce((m, s) => Math.max(m, s.multi && s.anchorN ? Math.min(3, s.anchorN) : (s.multi ? 2 : 1)), 1);
-        const marginV = maxPanels >= 3 ? 770 : 930;
+        const marginV = maxPanels >= 3 ? 700 : 930;
         const subsFx = tailFx.find(f => f.startsWith('subtitles='));
         if (subsFx) {
           const assF = subsFx.replace(/^subtitles=/, '');
@@ -2214,7 +2259,10 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
       args.push('-vf', vf.join(','));
     }
     args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '26', '-threads', '1');
-    args.push('-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-pix_fmt', 'yuv420p');
+    // AUDIO NORMALIZE: user "suaranya kok kaya sedikit di kecilin ya, coba di normalin"
+    // loudnorm = EBU R128 broadcast standard, loudness target -16 LUFS (TikTok/IG ideal).
+    // dynamic detection → no 2-pass needed (1-pass quality cukup buat voice).
+    args.push('-c:a', 'aac', '-b:a', '192k', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11:linear=true', '-movflags', '+faststart', '-pix_fmt', 'yuv420p');
     args.push(toFwd(output));
 
     // DEBUG: log args ffmpeg untuk troubleshooting sendcmd

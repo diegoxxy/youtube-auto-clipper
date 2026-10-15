@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createJob, createUploadJob, getJob, type JobMeta, type JobOptions } from "@/lib/api";
 import { ClipCard } from "@/components/ClipCard";
 import { ProgressBar } from "@/components/ProgressBar";
+import { JobLogs } from "@/components/JobLogs";
+import { JobQueue } from "@/components/JobQueue";
 import { Hero } from "@/components/Hero";
 import SegmentPicker from "@/components/SegmentPicker";
 
@@ -19,7 +21,7 @@ export default function Home() {
   const [refId, setRefId] = useState<string | null>(null);
   const [subTpl, setSubTpl] = useState("karaoke");
   const [fmtMode, setFmtMode] = useState<"auto" | "custom">("auto");
-  const [customFmt, setCustomFmt] = useState<"9:16" | "9:16_fill" | "9:16_split" | "16:9" | "16:9_fill">("9:16_fill");
+  const [customFmt, setCustomFmt] = useState<"9:16" | "9:16_fill" | "16:9_fill" | "adaptive">("9:16");
 
   // ponytail: jobId cuma di React state → refresh halaman = hasil clip hilang.
   // Persist ke localStorage; restore + re-fetch job saat mount. Backend tetap
@@ -38,22 +40,71 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
+  // ponytail: poll() pakai ref timer — dipanggil ulang (submit baru / restore)
+  // harus bunuh timer lama dulu (setInterval numpuk = response cepat-lambat
+  // rebutan setJob → UI kedip). High-water mark ANTI-MUNDUR nempel per-job.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastProgressRef = useRef(0);
+  const [backendDown, setBackendDown] = useState(false);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const poll = useCallback((id: string) => {
+    stopPolling();
+    lastProgressRef.current = 0;
+    let failStreak = 0;
+    const tick = async () => {
+      try {
+        const meta = await getJob(id);
+        failStreak = 0;
+        setBackendDown(false);
+        // ponytail: progress HANYA NAIK. Polling paralel/late-response bisa
+        // kasih metadata versi LAMA (progress 78 abis render c1, terus dapet
+        // 55 dari request lemot) → bar mundur. Simpan high-water, tolak turun.
+        if (typeof meta.progress === "number" && meta.progress < lastProgressRef.current) return;
+        if (typeof meta.progress === "number") lastProgressRef.current = meta.progress;
+        setJob(meta);
+        if (meta.status === "done" || meta.status === "failed") stopPolling();
+      } catch {
+        // backend sesaat sibuk (ffmpeg CPU 100% → /health timeout) JANGAN
+        // bunuh polling: retry 20x (30 detik) dulu, baru nyerah + kasih
+        // tau user. Dulu 1x fetch gagal = clearInterval = progress FROZEN
+        // selamanya padahal render tetap jalan di belakang.
+        failStreak++;
+        if (failStreak === 5) setBackendDown(true);
+        if (failStreak >= 20) { stopPolling(); }
+      }
+    };
+    void tick();
+    pollRef.current = setInterval(tick, 1500);
+  }, [stopPolling]);
+
+  // Restore job terakhir + LANJUT polling. Refresh tab pas render berjalan
+  // dulu bikin progress beku (restore tapi ga poll) → user kira stuck.
   useEffect(() => {
     let id: string | null = null;
     try { id = localStorage.getItem(KEY); } catch { id = null; }
     if (!id) return;
     setRestoring(true);
     getJob(id)
-      .then((meta) => { setJobIdState(id); setJob(meta); })
+      .then((meta) => {
+        setJobIdState(id); setJob(meta);
+        lastProgressRef.current = typeof meta.progress === "number" ? meta.progress : 0;
+        if (!["done", "failed"].includes(meta.status)) poll(id);
+      })
       .catch(() => { try { localStorage.removeItem(KEY); } catch {} })
       .finally(() => setRestoring(false));
-  }, []);
+    return stopPolling;
+  }, [poll, stopPolling]);
 
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setJob(null);
+    setBackendDown(false);
     if (mode === "youtube" && !url.trim()) return setError("Masukkan URL YouTube dulu!");
     if (mode === "upload" && !file) return setError("Pilih file video dulu!");
     setLoading(true);
@@ -71,35 +122,16 @@ export default function Home() {
     }
   }
 
-  function poll(id: string) {
-    // ponytail: progress HANYA NAIK. Polling paralel/late-response bisa kasih
-    // metadata versi LAMA (progress 78 abis render c1, terus dapet 55 dari
-    // request yang lemot) → bar mundur (user 2026-10-03: "progress sering
-    // maju mundur"). Simpan high-water mark, tolak update yg turun.
-    let lastProgress = 0;
-    const timer = setInterval(async () => {
-      try {
-        const meta = await getJob(id);
-        if (typeof meta.progress === "number" && meta.progress < lastProgress) {
-          return;  // response lama, buang
-        }
-        if (typeof meta.progress === "number") lastProgress = meta.progress;
-        setJob(meta);
-        if (meta.status === "done" || meta.status === "failed") clearInterval(timer);
-      } catch {
-        clearInterval(timer);
-      }
-    }, 1500);
-  }
+    const busy = !!job && !["done", "failed"].includes(job.status);
 
-  const busy = !!job && !["done", "failed"].includes(job.status);
-
-  // Job terakhir ke-restore pas refresh; kasih jalan buat mulai job baru
-  // tanpa harus nunggu restore selesai.
-  const resetJob = () => {
-    setJobId(null);
-    setJob(null);
-  };
+    // Job terakhir ke-restore pas refresh; kasih jalan buat mulai job baru
+    // tanpa harus nunggu restore selesai.
+    const resetJob = () => {
+      stopPolling();
+      setBackendDown(false);
+      setJobId(null);
+      setJob(null);
+    };
 
   // Template CapCut populer buat clipping. Preview video 4s lewat /api/subtitle-preview/:id.
   const SUB_TEMPLATES = [
@@ -119,6 +151,11 @@ export default function Home() {
           Mengambil clip terakhir…
         </div>
       )}
+
+      {/* Job Queue - running jobs */}
+      <section className="max-w-3xl mx-auto px-4 mb-4">
+        <JobQueue />
+      </section>
 
       {/* Input section */}
       <section className="max-w-3xl mx-auto px-4 -mt-10 relative z-10" id="generate">
@@ -250,12 +287,11 @@ export default function Home() {
             ) : (
               <div className="grid grid-cols-2 gap-2.5">
                 {([
-                  { id: "9:16", name: "Crop Wajah", desc: "Fokus speaker (tracking)" },
-                  { id: "9:16_fill", name: "Band + Blur", desc: "9:16 band, auto-split" },
-                  { id: "9:16_split", name: "2 Kolom", desc: "Force split panel" },
-                                    { id: "16:9_fill", name: "Landscape TikTok", desc: "Video utuh + blur atas-bawah" },
-                                    { id: "16:9", name: "16:9 YouTube", desc: "Full HD landscape" },
-                ] as const).map((f) => (
+                                  { id: "9:16", name: "Crop Wajah", desc: "Fokus speaker (tracking)" },
+                                                                    { id: "9:16_fill", name: "Band + Blur", desc: "9:16 band, auto-split" },
+                                                                    { id: "16:9_fill", name: "Landscape TikTok", desc: "16:9 band + blur" },
+                                                                    { id: "adaptive", name: "Adaptive", desc: "1 org = talking head, rame = band blur" },
+                                ] as const).map((f) => (
                   <button
                     key={f.id}
                     type="button"
@@ -338,10 +374,29 @@ export default function Home() {
           </div>
           <ProgressBar job={job} />
 
+          {(backendDown || job.status === "clipping") && job.status !== "done" && job.status !== "failed" && (
+            <div className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3 leading-relaxed">
+              {backendDown
+                ? "⚠️ Backend lagi sibuk (render makan CPU) — data mungkin telat 30 detik. Render tetap jalan, jangan tutup jendela ini."
+                : "ℹ️ Fase render memakan CPU penuh — progress update tiap 1 klip selesai (bukan per detik). Video panjang (30+ menit) butuh 40-80 menit total."}
+            </div>
+          )}
+
           {job.error && (
             <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
               {job.error}
             </p>
+          )}
+
+          {job && !["queued", "done", "failed"].includes(job.status) && (
+            <details className="group">
+              <summary className="cursor-pointer text-xs font-semibold text-zinc-400 hover:text-zinc-300 px-1 py-2 transition">
+                📋 Lihat log backend
+              </summary>
+              <div className="mt-3">
+                <JobLogs jobId={job.jobId} />
+              </div>
+            </details>
           )}
 
           {job.videoInfo && (

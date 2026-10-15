@@ -4,6 +4,7 @@ export type JobStatus =
   | "transcribing"
   | "segmenting"
   | "ranking"
+  | "ranked"
   | "clipping"
   | "done"
   | "failed";
@@ -19,7 +20,7 @@ export interface JobOptions {
   refId?: string | null;
 }
 
-export type ClipFormat = "9:16" | "1:1" | "16:9" | "9:16_fill" | "9:16_split" | "16:9_fill";
+export type ClipFormat = "9:16" | "1:1" | "16:9" | "9:16_fill" | "9:16_split" | "16:9_fill" | "adaptive";
 
 export interface Clip {
   id: string;
@@ -50,6 +51,9 @@ export interface JobMeta {
   error?: string | null;
   createdAt: string;
   updatedAt: string;
+  _queuePos?: number;         // antrian nomor berapa
+  _queueWait?: number;        // waktu tunggu (ms)
+  _lastProgressUpdate?: string; // timestamp update terakhir
 }
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
