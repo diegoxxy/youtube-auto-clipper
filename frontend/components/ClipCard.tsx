@@ -21,10 +21,16 @@ function ClipCardInner({ job, clip }: { job: JobMeta; clip: Clip }) {
   const src = streamUrl(job.jobId, clip.id, fmt);
   const thumb = thumbUrl(job.jobId, clip.id, fmt);
   const clipDuration = (clip.end ?? clip.start + (job.options.targetDuration ?? 30)) - clip.start;
+  const isPortrait = fmt.startsWith("9:16");
+  const ts = (s: number) => {
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60), h = Math.floor(m / 60);
+    const mm = String(m % 60).padStart(2, "0");
+    return h > 0 ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+  };
 
   return (
     <div className="glass rounded-2xl overflow-hidden group hover:border-zinc-500/60 transition">
-      <div className="relative aspect-video bg-ink-2 overflow-hidden">
+      <div className={`relative ${isPortrait ? "aspect-[9/16]" : "aspect-video"} bg-ink-2 overflow-hidden`}>
         {playing ? (
           <video
             key={src}
@@ -39,13 +45,21 @@ function ClipCardInner({ job, clip }: { job: JobMeta; clip: Clip }) {
             className="absolute inset-0 flex items-center justify-center hover:bg-black/30 transition"
             aria-label="Putar preview"
           >
-            {!noThumb && (
+            {!noThumb ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={thumb}
                 alt={clip.title || "clip cover"}
                 onError={() => setNoThumb(true)}
                 className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : (
+              <video
+                src={`${src}#t=1`}
+                preload="metadata"
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-contain bg-black pointer-events-none"
               />
             )}
             <span className="relative z-10 w-14 h-14 rounded-full bg-white/10 border border-white/20 backdrop-blur flex items-center justify-center group-hover:scale-110 transition">
@@ -74,8 +88,13 @@ function ClipCardInner({ job, clip }: { job: JobMeta; clip: Clip }) {
 
       <div className="p-4 space-y-3">
         {clip.title && <h3 className="font-semibold leading-snug">{clip.title}</h3>}
+        {/* Timestamp dari source video */}
+        <p className="text-xs text-zinc-600">
+          📹 {ts(clip.start)} – {ts(clip.end ?? clip.start + (job.options.targetDuration ?? 30))} 
+          ({Math.round((clip.end ?? clip.start + (job.options.targetDuration ?? 30)) - clip.start)}s)
+        </p>
         {clip.reason && (
-          <p className="text-sm text-zinc-500 leading-relaxed line-clamp-2">{clip.reason}</p>
+          <p className="text-sm text-zinc-500 leading-relaxed whitespace-pre-line">{clip.reason}</p>
         )}
         {clip.hookLabel && (
           <span className="inline-block text-[11px] px-2 py-0.5 rounded-full bg-brand/10 border border-brand/30 text-brand-2">
