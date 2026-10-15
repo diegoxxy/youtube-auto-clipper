@@ -6,17 +6,20 @@
 
 ## Quick Start
 
+> Windows pakai **PowerShell / CMD** (atau Git Bash), macOS pakai **Terminal**.
+
 ```bash
-# 1. Clone/copy project ke PC baru
-cd C:\path\to\youtube-auto-clipper
+# 1. Clone + masuk folder
+git clone https://github.com/diegoxxy/youtube-auto-clipper.git
+cd youtube-auto-clipper
 
 # 2. Install dependencies
 npm run setup
 
-# 3. Buat .env, setup API key (lihat bagian CONFIG bawah)
-# Edit backend/.env + frontend/.env.local
+# 3. Setup API key (lihat bagian "Konfigurasi API AI" di bawah)
+#    Edit backend/.env
 
-# 4. Jalankan backend + frontend
+# 4. Jalankan backend + frontend (dua terminal)
 npm run dev
 
 # 5. Buka http://localhost:3050 di browser
@@ -27,53 +30,125 @@ npm run dev
 ## Persyaratan Sistem
 
 ### PC / OS
-- **Windows 10/11** (64-bit)
+- **Windows 10/11** (64-bit) atau **macOS 12+** (Intel / Apple Silicon)
 - **RAM minimal:** 8GB (16GB recommended untuk rendering)
 - **Disk:** 50GB minimum (video raw + cache besar)
 
-### Software yang Harus Diinstall
+---
+
+## Install Software Wajib
+
+Pilih tab OS kamu.
+
+### 🪟 Windows
 
 #### 1. **Node.js** (v18 atau v20)
-- Download: https://nodejs.org/
-- Install via **Windows Installer** (rekomendasi)
+- Download: https://nodejs.org/ (pilih **LTS**)
+- Install via **Windows Installer**, centang semua default
 - Verifikasi:
   ```bash
   node --version
   npm --version
   ```
 
-#### 2. **FFmpeg** (full build dengan libass subtitle)
-- **Paling mudah:** Winget (Windows Package Manager)
-  ```bash
-  winget install ffmpeg
-  ```
-- Atau download manual: https://ffmpeg.org/download.html
-- Verifikasi:
-  ```bash
-  ffmpeg -version | grep libass
-  ```
-  (harus ada `libass` di output)
+#### 2. **Git** (buat clone repo)
+- Download: https://git-scm.com/download/win
+- Install default saja
+- Verifikasi: `git --version`
 
-#### 3. **Python 3.11**
-- Download: https://www.python.org/downloads/
-- **Penting:** Saat install, centang **"Add Python to PATH"**
+#### 3. **FFmpeg** (full build dengan libass subtitle)
+- **Paling mudah:** Winget (sudah ada di Windows 10/11):
+  ```bash
+  winget install Gyan.FFmpeg
+  ```
+- Verifikasi (**terminal baru** setelah install):
+  ```bash
+  ffmpeg -version
+  ```
+  Harus keluar baris `--enable-libass`. Kalau command tidak dikenali, **restart PC** dulu (PATH belum ke-refresh).
+
+#### 4. **Python 3.11**
+- Download: https://www.python.org/downloads/release/python-3119/ (Windows installer 64-bit)
+- Saat install, **WAJIB centang** ☑ `Add python.exe to PATH`
 - Verifikasi:
   ```bash
   python --version
   pip --version
   ```
 
-#### 4. **yt-dlp** (optional, tapi recommended)
-- Buat download YouTube lebih reliable
+#### 5. **yt-dlp** (optional, tapi recommended — download YouTube lebih reliable)
   ```bash
   pip install yt-dlp
   ```
 
-#### 5. **Python Dependencies**
-- Setelah project di-clone, run:
+---
+
+### 🍎 macOS
+
+#### 1. **Homebrew** (package manager — kalau belum ada)
+- Buka **Terminal**, paste:
   ```bash
-  pip install opencv-python numpy scipy scikit-learn requests pydub
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   ```
+- Verifikasi: `brew --version`
+
+#### 2. **Node.js** (v18 atau v20)
+  ```bash
+  brew install node@20
+  brew link --overwrite node@20
+  ```
+- Verifikasi:
+  ```bash
+  node --version
+  npm --version
+  ```
+
+#### 3. **Git**
+- Sudah otomatis terinstall via Xcode Command Line Tools. Kalau belum:
+  ```bash
+  xcode-select --install
+  ```
+- Verifikasi: `git --version`
+
+#### 4. **FFmpeg** (sudah termasuk libass)
+  ```bash
+  brew install ffmpeg
+  ```
+- Verifikasi:
+  ```bash
+  ffmpeg -version | grep libass
+  ```
+  (harus ada `libass` di output)
+
+#### 5. **Python 3.11**
+  ```bash
+  brew install python@3.11
+  ```
+- Verifikasi:
+  ```bash
+  python3.11 --version
+  pip3.11 --version
+  ```
+
+#### 6. **yt-dlp** (optional, tapi recommended)
+  ```bash
+  brew install yt-dlp
+  ```
+
+---
+
+### Python Dependencies (Windows & macOS)
+
+Setelah project di-clone (langkah berikutnya), run:
+```bash
+# Windows
+pip install opencv-python numpy scipy scikit-learn requests pydub
+
+# macOS (pakai opencv-headless, lebih ringan & tanpa GUI conflict)
+pip3.11 install opencv-python-headless numpy scipy scikit-learn requests pydub
+```
+
+> **Mac Apple Silicon note:** kalau `opencv` error import, pastikan pakai Python 3.11 dari Homebrew (bukan python bawaan macOS).
 
 ---
 
@@ -212,12 +287,19 @@ Pakai AI lokal di PC, nol biaya, nol internet needed (setelah download model).
 
 ### Backend (Port 4010)
 
+**Windows:**
 ```bash
 cd backend
 node server.js
 ```
 
-**Output yang benar:**
+**macOS:**
+```bash
+cd backend
+node server.js
+```
+
+Output yang benar di kedua OS:
 ```
 [boot] FFmpeg OK
 [boot] AI provider: openai
@@ -227,6 +309,7 @@ YouTube Auto-Clipper API running on port 4010
 
 ### Frontend (Port 3050) — Terminal Baru
 
+**Windows & macOS:**
 ```bash
 cd frontend
 npm run dev
@@ -263,26 +346,33 @@ Buka **http://localhost:3050** di browser.
 # Pastikan FFmpeg di PATH
 ffmpeg -version
 
-# Kalau tidak ditemukan, install via Winget:
-winget install ffmpeg
+# Windows (Winget):
+winget install Gyan.FFmpeg
+
+# macOS (Homebrew):
+brew install ffmpeg
 ```
 
 ### Error: `port 4010 in use`
 ```bash
-# Cek siapa pakai port 4010
+# Windows:
 netstat -ano | findstr :4010
+taskkill /F /PID <PID>
 
-# Kill process (ganti PID)
-taskkill /F /PID 12345
+# macOS:
+lsof -i :4010
+kill -9 <PID>
 ```
 
 ### Error: `Python not found`
 ```bash
-# Verifikasi Python path
+# Windows:
 python --version
+# (Kalau tidak di PATH, set di backend/.env: PYTHON_BIN=C:/.../python.exe)
 
-# Kalau tidak di PATH, set manual di backend/.env:
-PYTHON_BIN=C:/Users/YourUsername/AppData/Local/Programs/Python/Python311/python.exe
+# macOS:
+python3.11 --version
+# (Kalau tidak di PATH, set di backend/.env: PYTHON_BIN=/opt/homebrew/bin/python3.11)
 ```
 
 ### Backend slow / API timeout
