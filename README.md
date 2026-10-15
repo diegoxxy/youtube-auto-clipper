@@ -8,6 +8,31 @@
 
 > Windows pakai **PowerShell / CMD** (atau Git Bash), macOS pakai **Terminal**.
 
+### ⚡ Cara 1-Click (Paling Mudah)
+
+### Windows:
+1. **Clone Repo:**
+   ```cmd
+   git clone https://github.com/diegoxxy/youtube-auto-clipper.git
+   cd youtube-auto-clipper
+   ```
+2. **Double-Click File `Start App.bat`**:
+   - Otomatis install semua dependency (Backend, Frontend, Python).
+   - Menunggu **Backend (4010)** dan **Frontend (3050)** bener-bener READY.
+   - Otomatis **membuka Browser (`http://localhost:3050`)** setelah kedua service UP.
+
+### macOS / Linux:
+```bash
+git clone https://github.com/diegoxxy/youtube-auto-clipper.git
+cd youtube-auto-clipper
+npm run setup    # install semua package (1x saja)
+npm start        # tunggu backend+frontend ready, browser kebuka otomatis
+```
+
+---
+
+### 🔧 Cara Manual (Step-by-step)
+
 ```bash
 # 1. Clone + masuk folder
 git clone https://github.com/diegoxxy/youtube-auto-clipper.git
