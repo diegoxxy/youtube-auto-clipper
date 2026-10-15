@@ -53,11 +53,11 @@ function resolveYtDlp() {
   throw new Error('yt-dlp tidak ditemukan di PATH. Install: pip install yt-dlp atau winget install yt-dlp. Dicoba: ' + checked.join(', '));
 }
 
-function spawnYtDlp(url, jobDir) {
+function spawnYtDlp(url, outDir) {
   return new Promise((resolve, reject) => {
     const ytDlpBin = resolveYtDlp();
-    const outTpl = path.join(jobDir, 'raw.%(ext)s');
-    const infoPath = path.join(jobDir, 'yt-info.json');
+    const outTpl = path.join(outDir, 'raw.%(ext)s');
+    const infoPath = path.join(outDir, 'yt-info.json');
     // --no-playlist, --merge-output-format mp4, best mp4, tulis info json
     const args = [
       '--no-playlist',
@@ -137,16 +137,25 @@ function pruneCache(cacheDir) {
   } catch {}
 }
 
-// ponytail: simpan video+info ke shared cache supaya job lain skip download
+// ponytail: simpan video+info ke shared cache supaya job lain skip download.
+// Nama: {title}-1080p.mp4 (judul YT + resolusi). Title disanitasi (ga ada /, \, :, *, ?, ", <, >, |).
 function storeCache(videoId, videoPath, videoInfo, cacheDir) {
   if (!videoId || !fs.existsSync(videoPath)) return;
   try {
     fs.mkdirSync(cacheDir, { recursive: true });
-    const cached = path.join(cacheDir, `${videoId}.mp4`);
-    try { fs.linkSync(videoPath, cached); }          // hardlink same-volume = nol copy
-    catch { fs.copyFileSync(videoPath, cached); }     // cross-volume / ada
-    try { fs.writeFileSync(path.join(cacheDir, `${videoId}.info.json`), JSON.stringify({ title: videoInfo.title, duration: videoInfo.duration }, null, 2)); } catch {}
-    console.log(`[download] video cache STORE ${videoId} (${Math.round(fs.statSync(videoPath).size / 1e6)}MB)`);
+    // sanitasi judul YT buat nama file
+    const title = (videoInfo.title || 'video').replace(/[\/\\:*?"<>|]/g, '_').slice(0, 100);
+    const cached = path.join(cacheDir, `${title}-1080p.mp4`);
+    if (path.resolve(videoPath) !== path.resolve(cached)) {
+      if (path.dirname(path.resolve(videoPath)) === path.resolve(cacheDir)) {
+        fs.renameSync(videoPath, cached);            // src udah di cache = rename instan
+      } else {
+        try { fs.linkSync(videoPath, cached); }      // hardlink same-volume = nol copy
+        catch { fs.copyFileSync(videoPath, cached); } // cross-volume / ada
+      }
+    }
+    try { fs.writeFileSync(path.join(cacheDir, `${title}-1080p.info.json`), JSON.stringify({ videoId, title: videoInfo.title, duration: videoInfo.duration }, null, 2)); } catch {}
+    console.log(`[download] video cache STORE "${title}-1080p.mp4" (${Math.round(fs.statSync(cached).size / 1e6)}MB)`);
   } catch (e) { console.warn('[download] cache store gagal:', String(e.message).slice(0, 120)); }
 }
 
@@ -158,21 +167,41 @@ async function downloadVideo({ url, jobDir, runSkill }) {
 
   // VIDEO CACHE: URL sama = video sama. Hardlink ke jobDir, skip download 1.4GB.
   // pertama kali tetap download (store ke cache), job ke-2+ instan.
+  // Cache filename: {title}-1080p.mp4 (judul YT + resolusi).
   const videoId = extractVideoId(url);
   const cacheDir = cacheDirOf(jobDir);
   if (videoId) {
     pruneCache(cacheDir);
-    const cachedRaw = path.join(cacheDir, `${videoId}.mp4`);
-    if (fs.existsSync(cachedRaw) && fs.statSync(cachedRaw).size > 102400) {
+    // Cari file cache dengan pattern {title}-1080p.mp4 — WAJIB match videoId (info.json),
+    // bukan sembarang 1080p (cache bisa berisi banyak video beda).
+    let cachedRaw = null;
+    let cachedInfo = null;
+    try {
+      const files = fs.readdirSync(cacheDir).filter(f => f.endsWith('-1080p.mp4'));
+      // cek info.json dulu: kalau videoId match → cache HIT beneran
+      for (const f of files) {
+        const infoPath = path.join(cacheDir, f.replace('.mp4', '.info.json'));
+        if (!fs.existsSync(infoPath)) continue;
+        try {
+          const meta = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+          if (meta.videoId === videoId) { cachedRaw = path.join(cacheDir, f); cachedInfo = infoPath; break; }
+        } catch {}
+      }
+      // fallback: file videoId lama (format lama {id}.mp4)
+      if (!cachedRaw) {
+        const legacy = path.join(cacheDir, `${videoId}.mp4`);
+        if (fs.existsSync(legacy)) { cachedRaw = legacy; cachedInfo = path.join(cacheDir, `${videoId}.info.json`); }
+      }
+    } catch {}
+    if (cachedRaw && fs.existsSync(cachedRaw) && fs.statSync(cachedRaw).size > 102400) {
       const dest = path.join(jobDir, 'raw.mp4');
       try { fs.linkSync(cachedRaw, dest); }       // hardlink NTFS same-volume: no copy
       catch { fs.copyFileSync(cachedRaw, dest); }
       let info = { id: videoId, title: 'video', duration: null, _source: 'cache' };
-      const cachedInfo = path.join(cacheDir, `${videoId}.info.json`);
-      if (fs.existsSync(cachedInfo)) {
+      if (cachedInfo && fs.existsSync(cachedInfo)) {
         try { info = { ...info, ...JSON.parse(fs.readFileSync(cachedInfo, 'utf8')) }; } catch {}
       }
-      console.log(`[download] video cache HIT ${videoId} -> hardlink, skip download ${Math.round(fs.statSync(dest).size / 1e6)}MB`);
+      console.log(`[download] video cache HIT (${path.basename(cachedRaw)}) → hardlink, skip download ${Math.round(fs.statSync(dest).size / 1e6)}MB`);
       return { videoPath: dest, videoInfo: info, warnings: ['Video dari cache — sudah pernah didownload, skip download ulang'] };
     }
   }
@@ -205,23 +234,32 @@ async function downloadVideo({ url, jobDir, runSkill }) {
     }
   }
 
-  // Fallback: yt-dlp direct (retry 1x untuk transient)
+  // Fallback: yt-dlp direct (download ke cache dulu, lalu hardlink ke jobDir)
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const res = await spawnYtDlp(url, jobDir);
+      // download ke cacheDir (bukan jobDir)
+      const res = await spawnYtDlp(url, cacheDir);
       videoInfo = res.info;
-      videoPath = findDownloadedVideo(jobDir, videoInfo && videoInfo.id);
-      if (!videoPath) throw new Error('yt-dlp selesai tapi file video tidak ditemukan');
-      // info tidak selalu punya durasi/filename yang rapi — enrich
+      
+      // videoInfo.id mungkin null/raw, pakai videoId (extractVideoId)
+      const vId = videoId || videoInfo.id;
+      const rawFile = path.join(cacheDir, 'raw.mp4');
+      const dest = path.join(jobDir, 'raw.mp4');
+      
+      // hardlink ke jobDir
+      try { fs.linkSync(rawFile, dest); }
+      catch { fs.copyFileSync(rawFile, dest); }
+      
+      videoPath = dest;
       videoInfo = {
-        id: videoInfo.id || 'raw',
+        id: vId,
         title: videoInfo.title || videoInfo.fulltitle || 'video',
         duration: videoInfo.duration || null,
-        ext: path.extname(videoPath).slice(1) || 'mp4',
         _source: 'yt-dlp',
       };
-      if (attempt > 1) warnings.push(`yt-dlp retry berhasil di attempt ${attempt}`);
-      storeCache(videoId, videoPath, videoInfo, cacheDir);   // yt-dlp path simpan cache juga
+      // Simpan ke cache agar next time jadi HIT
+      storeCache(vId, rawFile, videoInfo, cacheDir);
+      
       return { videoPath, videoInfo, warnings };
     } catch (e) {
       lastErr = e;
