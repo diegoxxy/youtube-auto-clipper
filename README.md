@@ -81,16 +81,24 @@ npm run dev
 
 ### 1. Copy Folder Project
 
-**Opsi A: Dari Flashdisk/Zip**
+**Opsi A: Dari GitHub (RECOMMENDED)** 🎯
+
 ```bash
-# Extract ke folder baru
-# C:\Users\<username>\youtube-auto-clipper\
+# Clone repo
+git clone https://github.com/diegoxxy/youtube-auto-clipper.git
+cd youtube-auto-clipper
 ```
 
-**Opsi B: Dari Git (kalau ada repo GitHub)**
+**Opsi B: Download ZIP**
+- Buka https://github.com/diegoxxy/youtube-auto-clipper
+- Klik tombol hijau **Code** → **Download ZIP**
+- Extract ke folder, ada `youtube-auto-clipper-main/`
+- Rename jadi `youtube-auto-clipper` (biar path konsisten)
+
+**Opsi C: Flashdisk / HDD eksternal**
 ```bash
-git clone https://github.com/your-username/youtube-auto-clipper.git
-cd youtube-auto-clipper
+# Copas folder langsung
+# C:\Users\<username>\youtube-auto-clipper\
 ```
 
 ### 2. Install Dependencies
