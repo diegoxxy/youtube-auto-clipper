@@ -87,6 +87,10 @@ function detectViralMoments({ transcriptSegments, duration, videoInfo }) {
     }
   }
   
+  // Jitter sekali per momen (bukan di dalem comparator — comparator acak
+  // = sort invalid/transitifitas rusak). ±10 skor → momen sekelas bisa
+  // tertukar urutan antar job → klip ga selalu sama persis.
+  for (const m of moments) m.viralScore += (Math.random() * 20 - 10);
   // Sort by viralScore, dedupe overlapping moments, ambil top (max 10)
   moments.sort((a, b) => b.viralScore - a.viralScore);
   

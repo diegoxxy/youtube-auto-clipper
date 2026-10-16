@@ -1340,8 +1340,9 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
                     // SPLIT hanya kalau 2+ orang BICARA PERSISTEN (nOpen>=2 masing2),
                     // bukan 1 pembicara + 1 listener yang kebetulan bereaksi sekejap.
                     const nAct = anchorF.filter(a => a.nOpen >= 2).length;
-                    const nActLoose = anchorF.filter(a => a.mx >= ACT).length;
-                    s.anchorN = anchorF.length;  // wajah persisten = org asli (3 panel)
+                                        const nActLoose = anchorF.filter(a => a.mx >= ACT).length;
+                                        s.nAct = nAct;  // untuk gate anti-flicker (v22h)
+                                        s.anchorN = anchorF.length;  // wajah persisten = org asli (3 panel)
                     const wasMulti = s.multi;
                     // Multi kalau 2+ pembicara persist; ATAU 1 pembicara + 1 reaksi
                     // kuat (mx tinggi DAN nOpen>=1 = ekspresif/ketawa nyata, bukan noise).
@@ -1366,15 +1367,12 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
               }
             }
             const med = arr => arr.length ? arr.sort((a, b) => a - b)[Math.floor(arr.length / 2)] : null;
-            // FIX "kurang centered": crop statis pakai MEDIAN = saat wajah
-            // di ujung range (cx 0.54 dari range 0.54-0.61) wajah meleset ke
-            // pinggir (output x 0.36). Crop center = TENGAH RANGE (min+max)/2
-            // → wajah selalu di [0.35, 0.65] walau goyang. Range kecil =
-            // lebih tengah. Wide: pakai MEDIAN (wajah dominan di sana).
+            // v22i: MEDIAN langsung (bukan range center). YuNet noise
+            // (mic/mug/false-positive) bikin range lebar → mid-range meleset
+            // dari wajah asli. Median = robust ke outlier, wajah asli dominan.
+            // User: "wajah ga pas di tengah, sering kepotong kanan/kiri".
             if (bucketAll.length >= 3) {
-              const mn = Math.min(...bucketAll), mx = Math.max(...bucketAll);
-              const rng = mx - mn;
-              s.spk_cx = [rng > 0.05 ? (mn + mx) / 2 : med(bucketAll)];
+              s.spk_cx = [med(bucketAll)];
             } else {
               s.spk_cx = [med(bucketAll) || anchorF[0].cx];
             }
@@ -1414,6 +1412,24 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           }
           console.log(`[ffmpeg] SEG ${s.start.toFixed(1)}-${s.end.toFixed(1)} opens=[${anchorF.map(a => a.mx.toFixed(3)).join(',')}] cx=[${anchorF.map(a => a.cx.toFixed(2)).join(',')}] → ${s.multi ? 'SPLIT' : (nAct === 1 ? 'SOLO' : 'jeda')}` + (wasMulti !== s.multi ? ' (override)' : ''));
         });
+
+        // JEDA cx warisan: jeda (nAct=0) tapi ada wajah terdeteksi →
+        // kamera STICK ke pembicara terakhir, jangan loncat ke wajah diem.
+        // User: "pindah-pindah cepet padahal gak ngomong".
+        for (let i = 0; i < segShots.length; i++) {
+          const s = segShots[i];
+          if (s.multi || !s.spk_cx || s.nAct >= 1) continue;
+          // Jeda (nAct=0): cari solo terakhir sebelumnya
+          for (let j = i - 1; j >= 0; j--) {
+            const prev = segShots[j];
+            if (!prev.multi && prev.spk_cx && prev.nAct >= 1) {
+              s.spk_cx = [...prev.spk_cx];
+              s.spk_cy = [...(prev.spk_cy || [0.42])];
+              console.log(`[ffmpeg] JEDA ${s.start.toFixed(1)}-${s.end.toFixed(1)} warisan cx=${s.spk_cx[0].toFixed(2)} dari ${prev.start.toFixed(1)}`);
+              break;
+            }
+          }
+        }
       }
       // ============ STABILISASI LAYOUT (anti-pusing) ============
       // User: "ganti-gantinya cepet banget bikin pusing. Priority: orang
@@ -1458,6 +1474,41 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
           console.log(`[ffmpeg] RE-MERGE pasca-gate: ${st.length} → ${merged2.length} layout`);
         }
         segShots = merged2;
+
+        // (3) ENFORCE MINIMUM SHOT DURATION: shot < 2s (solo/split apapun)
+        //     digabung ke tetangga terpanjang → anti-pusing universal.
+        //     User: "pindah-pindahnya cepet banget padahal gak ngomong".
+        const MIN_SHOT = 2.0;
+        let changed = true;
+        while (changed && segShots.length > 1) {
+          changed = false;
+          for (let i = 0; i < segShots.length; i++) {
+            const s = segShots[i];
+            const dur = s.end - s.start;
+            if (dur >= MIN_SHOT) continue;
+            // Pilih tetangga terpanjang (prev vs next)
+            const prev = i > 0 ? segShots[i - 1] : null;
+            const next = i < segShots.length - 1 ? segShots[i + 1] : null;
+            const prevDur = prev ? prev.end - prev.start : 0;
+            const nextDur = next ? next.end - next.start : 0;
+            if (!prev && !next) break;
+            const mergeWith = (prevDur >= nextDur && prev) ? prev : next;
+            if (mergeWith === prev) {
+              prev.end = s.end;
+              prev.track_cx = [...(prev.track_cx || []), ...(s.track_cx || [])];
+              prev.spk_cx = [...(prev.spk_cx || []), ...(s.spk_cx || [])];
+              segShots.splice(i, 1);
+            } else {
+              next.start = s.start;
+              next.track_cx = [...(s.track_cx || []), ...(next.track_cx || [])];
+              next.spk_cx = [...(s.spk_cx || []), ...(next.spk_cx || [])];
+              segShots.splice(i, 1);
+            }
+            console.log(`[ffmpeg] MIN-SHOT ${s.start.toFixed(1)}-${s.end.toFixed(1)} ${dur.toFixed(1)}s < ${MIN_SHOT}s → merge`);
+            changed = true;
+            break;
+          }
+        }
       }
       shots = segShots;
       console.log(`[ffmpeg] SPLIT DEBUG n_people=${splitFaces.n_people} multi=${splitFaces.multi_ratio} speakers=${(splitFaces.speakers||[]).length} shots=${shots.length} graph=${splitGraph ? 'OK' : 'NULL'}`);
@@ -2112,8 +2163,11 @@ async function processClip({ ffmpegPath, videoPath, output, start, end, format, 
             console.log(`[ffmpeg] track_cx dispersion ${dispT.toFixed(2)} > 0.35 = 2 org alternating → static median (seg @${s.start.toFixed(1)})`);
             s.track_cx = null;
           }
+          // C1: mainCx = s.spk_cx[0] (pembicara utama median dari segmen ini, udah
+          // computed di loop di atas). Jangan reference anchorF di sini (scope beda).
+          const mainCx = (cxs && cxs.length) ? cxs[0] : 0.5;
           if (!cxsT || s.track_cx === null) {
-            const x = Math.max(0, Math.min(vi0.w - sc.w, Math.round(cxs[0] * vi0.w - sc.w / 2)));
+            const x = Math.max(0, Math.min(vi0.w - sc.w, Math.round(mainCx * vi0.w - sc.w / 2)));
             return `crop=${sc.w}:${sc.h}:${x}:${y},scale=1080:1920`;
           }
           // t CLIP-RELATIVE dalam segmen: 0..(end-start). t dimulai 0 di
