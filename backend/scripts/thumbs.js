@@ -40,14 +40,13 @@ function scoreCand(imgPath) {
 
 async function pickBestThumb(ffmpegPath, videoPath, fracs, candPaths, outPath) {
   // 1. extract semua kandidat (1 pass per frame, cepat)
+  const dur = spawnSync(ffmpegPath, ['-i', videoPath], { windowsHide: true, timeout: 15000 });
+  let total = 0;
+  const m = (dur.stderr || '').toString().match(/Duration: (\d+):(\d+):([\d.]+)/);
+  if (m) total = +m[1] * 3600 + +m[2] * 60 + +m[3];
+  if (!total) return false;
   let okCount = 0;
   for (let i = 0; i < fracs.length; i++) {
-    const dur = spawnSync(ffmpegPath, ['-i', videoPath], { windowsHide: true, timeout: 15000 });
-    // durasi via stderr
-    let total = 0;
-    const m = (dur.stderr || '').toString().match(/Duration: (\d+):(\d+):([\d.]+)/);
-    if (m) total = +m[1] * 3600 + +m[2] * 60 + +m[3];
-    if (!total) return false;
     const t = total * fracs[i];
     const r = spawnSync(ffmpegPath, ['-y', '-ss', String(t), '-i', videoPath,
       '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '3', candPaths[i]],

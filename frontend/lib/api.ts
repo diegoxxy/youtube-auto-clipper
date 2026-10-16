@@ -91,8 +91,11 @@ export async function createUploadJob(input: {
   fd.append("clipCount", String(input.options.clipCount ?? 5));
   fd.append("targetDuration", String(input.options.targetDuration ?? 60));
   fd.append("formats", JSON.stringify(input.options.formats ?? ["9:16"]));
+  fd.append("formatMode", input.options.formatMode ?? "auto");
   fd.append("subtitleLang", input.options.subtitleLang ?? "id");
   fd.append("includeSubtitles", String(input.options.includeSubtitles !== false));
+  fd.append("subtitleTemplate", input.options.subtitleTemplate ?? "bold");
+  if (input.options.refId) fd.append("refId", input.options.refId);
   const res = await fetch(apiUrl("/api/jobs/upload"), { method: "POST", body: fd });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Upload gagal (${res.status})`);

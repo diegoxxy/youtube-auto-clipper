@@ -289,10 +289,11 @@ function computeFaceCrop(videoPath, outW, outH, startSec = null, endSec = null) 
     }
     const scriptPath = path.join(__dirname, '..', 'face_frame.py');
     const py = process.env.PYTHON_BIN || 'C:/Users/diego/AppData/Local/Programs/Python/Python311/python.exe';
-    const cliArgs = [scriptPath, videoPath, String(outW), String(outH)];
+    const cliArgs = [scriptPath, toFwd(videoPath), String(outW), String(outH)];
     // FIX user "kurang pas di tengah": sample HANYA di window clip, bukan full video
     if (startSec != null) cliArgs.push(String(startSec));
     if (endSec != null) cliArgs.push(String(endSec));
+    if (!fs.existsSync(videoPath)) throw new Error(`Video not found: ${videoPath}`);
     const out = require('child_process').execFileSync(
       py, cliArgs,
       { encoding: 'utf8', timeout: 240000, windowsHide: true, maxBuffer: 1024 * 1024 }

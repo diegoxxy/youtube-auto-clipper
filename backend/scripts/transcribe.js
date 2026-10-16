@@ -156,10 +156,10 @@ async function transcribe({ url, jobDir, videoPath, runSkill, ffmpegPath, source
   // Helper: probe duration dari video
   function probeDuration(vp) {
     try {
-      const { execSync } = require('child_process');
-      const probe = execSync(`ffmpeg -i "${vp}" 2>&1 | grep Duration`, { encoding: 'utf8' });
-      const m = probe.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
-      if (m) return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseFloat(m[3]);
+      const { spawnSync } = require('child_process');
+      const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', vp], { encoding: 'utf8', windowsHide: true });
+      const d = parseFloat(probe.stdout);
+      if (isFinite(d)) return d;
     } catch {}
     return null;
   }

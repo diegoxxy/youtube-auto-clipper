@@ -195,8 +195,9 @@ export default function SegmentPicker({
   );
 }
 
-function fmtT(s: number) {
+// Format seconds to MM:SS
+const fmtT = (s: number) => {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${String(sec).padStart(2, "0")}`;
-}
+};

@@ -147,7 +147,12 @@ function writeMetadata(jobDir, data) {
 function readMetadata(jobId) {
   const p = path.join(JOBS_DIR, jobId, 'metadata.json');
   if (!fs.existsSync(p)) return null;
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (e) {
+    console.warn(`[meta] read ${jobId} corrupted: ${e.message}`);
+    return null;
+  }
 }
 function updateJob(jobId, patch) {
   const meta = readMetadata(jobId);
@@ -240,7 +245,7 @@ async function processJob(jobId) {
     updateJob(jobId, { status: 'downloading', progress: 5 });
         const url = meta0.url;
         // RESUME: raw sudah ada di jobDir (restart di tengah render) → skip download.
-        const existingRaw = ['raw.mp4', 'raw.webm', 'raw.mkv', 'raw.mov'].map(f => path.join(jobDir, f)).find(f => fs.existsSync(f));
+        const existingRaw = ['raw.mp4', 'raw.webm', 'raw.mkv', 'raw.mov'].map(f => path.join(jobDir, f)).find(f => fs.existsSync(f) && fs.statSync(f).size > 102400);
         if (existingRaw && meta0.videoPath === existingRaw) {
           videoPath = existingRaw;
           videoInfo = meta0.videoInfo || { id: 'raw', title: 'video', duration: probeDuration(existingRaw) };
@@ -324,8 +329,8 @@ async function processJob(jobId) {
         const rs = require('child_process').spawnSync(ffmpegPath,
           ['-ss', String(sStart), '-i', videoPath, '-t', String(Math.min(120, dur || 120)),
            '-vf', "select='gt(scene,0.25)',showinfo", '-f', 'null', '-'],
-          { captureOutput: true, timeout: 120000, windowsHide: true });
-        shots = ((rs.stderr || '').toString().match(/pts_time:/g) || []).length;
+          { encoding: 'utf8', timeout: 120000, windowsHide: true });
+        shots = ((rs.stderr || '').match(/pts_time:/g) || []).length;
       } catch (e) { shots = 0; }
       const sDur = Math.min(120, dur || 120);
       sourceInfo = JSON.stringify({
@@ -661,14 +666,19 @@ app.get('/api/jobs/:id/logs', (req, res) => {
   // event loop → semua request /health timeout saat render jalan).
   const TAIL = 262144;
   const readTail = (p, max) => {
-    const fd = fs.openSync(p, 'r');
+    let fd;
     try {
+      fd = fs.openSync(p, 'r');
       const size = fs.fstatSync(fd).size;
       const start = Math.max(0, size - max);
       const buf = Buffer.alloc(size - start);
       fs.readSync(fd, buf, 0, buf.length, start);
       return buf.toString('utf8');
-    } finally { fs.closeSync(fd); }
+    } catch (e) {
+      return '';
+    } finally {
+      if (fd !== undefined) try { fs.closeSync(fd); } catch {}
+    }
   };
   for (const logPath of [...logFiles].reverse()) {
     try {
@@ -976,14 +986,13 @@ app.post('/api/jobs/:id/render-clip', async (req, res) => {
     const s = Number(start), e = Number(end);
     if (!isFinite(s) || !isFinite(e) || e <= s) return res.status(400).json({ error: 'start/end invalid' });
     const jobDir = path.join(JOBS_DIR, req.params.id);
-    const metaPath = path.join(jobDir, 'metadata.json');
-    if (!fs.existsSync(metaPath)) return res.status(404).json({ error: 'job not found' });
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-    const videoPath = path.join(jobDir, 'raw.mp4');
-    if (!fs.existsSync(videoPath)) return res.status(400).json({ error: 'raw.mp4 belum ada' });
+      const metaPath = path.join(jobDir, 'metadata.json');
+      if (!fs.existsSync(metaPath)) return res.status(404).json({ error: 'job not found' });
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      const videoPath = path.join(jobDir, 'raw.mp4');
+      if (!fs.existsSync(videoPath)) return res.status(400).json({ error: 'raw.mp4 belum ada' });
 
-    const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
-    const clipsDir = path.join(jobDir, 'clips');
+      const clipsDir = path.join(jobDir, 'clips');
     fs.mkdirSync(clipsDir, { recursive: true });
     const clipId = `m${Date.now().toString(36)}`;
     const outName = `${clipId}_${format.replace(':', '-')}.mp4`;
@@ -1086,7 +1095,8 @@ app.get('/api/jobs/:id/media', (req, res) => {
 
 // Serve file media
 app.get('/api/jobs/:id/media/:filename', (req, res) => {
-  const p = path.join(JOBS_DIR, req.params.id, 'media', req.params.filename);
+  const base = path.basename(req.params.filename); // anti path traversal
+  const p = path.join(JOBS_DIR, req.params.id, 'media', base);
   if (!fs.existsSync(p)) return res.status(404).json({ error: 'not found' });
   return res.sendFile(path.resolve(p));
 });
@@ -1201,7 +1211,7 @@ app.post('/api/jobs/:id/clips/:clipId/edit', async (req, res) => {
     const outPath = path.join(jobDir, 'clips', outName);
     args.push(outPath);
 
-    const proc = spawn('ffmpeg', args);
+    const proc = spawn(ffmpegPath, args);
     let stderr = '';
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
     proc.on('error', (e) => res.status(500).json({ error: 'spawn error: ' + e.message }));

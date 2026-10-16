@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { apiUrl } from "@/lib/api";
 
@@ -13,8 +15,7 @@ export function JobQueue() {
         const res = await fetch(apiUrl("/api/jobs"));
         if (!res.ok) throw new Error(`${res.status}`);
         const data = await res.json();
-        // Filter non-done job
-        const active = (data.jobs || []).filter(
+        const active = (Array.isArray(data) ? data : (data.jobs || [])).filter(
           (j: any) => !["done", "failed"].includes(j.status)
         );
         setJobs(active);
