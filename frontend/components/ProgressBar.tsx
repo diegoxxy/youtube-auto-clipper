@@ -3,7 +3,7 @@ import { type JobMeta } from "@/lib/api";
 const STEPS: Record<string, { name: string; detail?: (job: JobMeta) => string }> = {
   queued: { name: "Mengantre", detail: (j) => {
     const queuePos = j._queuePos || "?";
-    return `Antrian #{queuePos}. Pos di belakang ~${j._queueWait || "3-5"} menit`;
+    return `Antrian #${queuePos}. Pos di belakang ~${j._queueWait || "3-5"} menit`;
   }},
   downloading: { name: "Mengunduh video", detail: (j) => {
     const source = (j.videoInfo as any)?._source || "download";
@@ -46,24 +46,23 @@ export function ProgressBar({ job }: { job: JobMeta }) {
   })();
 
   return (
-    <div className="glass rounded-2xl px-5 py-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
+    <div className="card rounded-2xl px-5 py-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1">
-          <div className="font-medium text-zinc-200">{step.name}</div>
-          {detail && <div className="text-xs text-zinc-400 mt-1">{detail}</div>}
+          <div className="font-medium text-text">{step.name}</div>
+          {detail && <div className="text-xs text-text-muted mt-1">{detail}</div>}
           {isStuck && (
             <div className="text-xs text-amber-300 mt-1.5 flex items-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+              <span className="inline-block w-1.5 h-1.5 bg-amber-400 rounded-full" />
               Progress tidak update sejak 5+ menit — render sedang lambat atau stuck
             </div>
           )}
         </div>
-        <span className="text-sm text-zinc-500 font-mono tabular-nums">{job.progress}%</span>
       </div>
-      <div className="h-2 bg-ink-2/80 rounded-full overflow-hidden">
+      <div className="h-2 bg-bg-2/80 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
-            failed ? "bg-red-500" : "bg-gradient-to-r from-brand to-brand-2"
+            failed ? "bg-red-500" : "bg-primary"
           }`}
           style={{ width: `${Math.max(2, job.progress)}%` }}
         />

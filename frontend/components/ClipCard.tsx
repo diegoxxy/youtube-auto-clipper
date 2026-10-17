@@ -29,8 +29,8 @@ function ClipCardInner({ job, clip }: { job: JobMeta; clip: Clip }) {
   };
 
   return (
-    <div className="glass rounded-2xl overflow-hidden group hover:border-zinc-500/60 transition">
-      <div className={`relative ${isPortrait ? "aspect-[9/16]" : "aspect-video"} bg-ink-2 overflow-hidden`}>
+    <div className="glass rounded-2xl overflow-hidden group hover:border-border-light/60 transition">
+      <div className={`relative ${isPortrait ? "aspect-[9/16]" : "aspect-video"} bg-bg-2 overflow-hidden`}>
         {playing ? (
           <video
             key={src}
@@ -89,28 +89,28 @@ function ClipCardInner({ job, clip }: { job: JobMeta; clip: Clip }) {
       <div className="p-4 space-y-3">
         {clip.title && <h3 className="font-semibold leading-snug">{clip.title}</h3>}
         {/* Timestamp dari source video */}
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-text-muted/60">
           📹 {ts(clip.start)} – {ts(clip.end ?? clip.start + (job.options.targetDuration ?? 30))} 
           ({Math.round((clip.end ?? clip.start + (job.options.targetDuration ?? 30)) - clip.start)}s)
         </p>
         {clip.reason && (
-          <p className="text-sm text-zinc-500 leading-relaxed whitespace-pre-line">{clip.reason}</p>
+          <p className="text-sm text-text-muted leading-relaxed whitespace-pre-line">{clip.reason}</p>
         )}
         {clip.hookLabel && (
-          <span className="inline-block text-[11px] px-2 py-0.5 rounded-full bg-brand/10 border border-brand/30 text-brand-2">
+          <span className="inline-block text-[11px] px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-accent">
             {clip.hookLabel}
           </span>
         )}
         <div className="flex items-center gap-2 flex-wrap pt-1">
           <button
             onClick={() => router.push(`/editor/${job.jobId}/${clip.id}`)}
-            className="px-3 py-2.5 rounded-xl text-sm font-semibold bg-zinc-800 hover:bg-zinc-700 transition flex-1"
+            className="px-3 py-2.5 rounded-xl text-sm font-semibold bg-bg-3 hover:bg-bg-2 transition flex-1"
           >
             ✏️ Edit
           </button>
           <a
             href={downloadUrl(job.jobId, clip.id, fmt)}
-            className="flex-1 text-center py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand to-brand-2 hover:opacity-90 transition"
+            className="flex-1 text-center py-2.5 rounded-xl text-sm font-semibold bg-primary hover:opacity-90 transition"
           >
             Download
           </a>

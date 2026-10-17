@@ -239,9 +239,9 @@ export default function EditorPage() {
     setSaving(false);
   };
 
-  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-zinc-500">Loading editor…</div>;
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-text-muted">Loading editor…</div>;
   if (!clip) return (
-    <div className="h-screen bg-black flex items-center justify-center text-zinc-500">
+    <div className="h-screen bg-black flex items-center justify-center text-text-muted">
       Clip tidak ditemukan. <button onClick={() => router.push("/")} className="ml-2 underline">Kembali</button>
     </div>
   );
@@ -276,7 +276,7 @@ export default function EditorPage() {
     <div className="h-screen bg-[#0b0b0f] text-white flex flex-col overflow-hidden">
       {/* Top bar */}
       <div className="h-12 border-b border-white/10 flex items-center px-4 gap-3 shrink-0 bg-[#101015]">
-        <button onClick={() => router.push("/")} className="text-zinc-400 hover:text-white text-sm flex items-center gap-1.5 transition">
+        <button onClick={() => router.push("/")} className="text-text-muted hover:text-white text-sm flex items-center gap-1.5 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -285,11 +285,11 @@ export default function EditorPage() {
         <div className="h-4 w-px bg-white/10" />
         <span className="text-sm font-medium truncate max-w-[40vw]">{clip.title || clipId}</span>
         <div className="flex-1" />
-        <span className="text-[11px] font-mono text-zinc-500 tabular-nums">{fmtT(currentTime)} / {fmtT(duration)}</span>
+        <span className="text-[11px] font-mono text-text-muted tabular-nums">{fmtT(currentTime)} / {fmtT(duration)}</span>
         <button
           onClick={saveEdits}
           disabled={saving}
-          className="px-5 py-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 transition shadow-lg shadow-violet-500/20"
+          className="px-5 py-1.5 rounded-lg bg-gradient-to-r from-primary to-fuchsia-500 text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 transition shadow-lg shadow-primary/20"
         >
           {saving ? "Rendering…" : "Export"}
         </button>
@@ -309,7 +309,7 @@ export default function EditorPage() {
               className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center gap-1 text-[10px] transition ${
                 tool === t.id
                   ? "bg-white/15 text-white shadow-inner"
-                  : "text-zinc-500 hover:bg-white/5 hover:text-white"
+                  : "text-text-muted hover:bg-white/5 hover:text-white"
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -427,25 +427,25 @@ export default function EditorPage() {
           {activeText && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Edit Teks</div>
+                <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Edit Teks</div>
                 <button onClick={() => deleteText(activeText.id)} className="text-xs text-red-400 hover:text-red-300 transition">Hapus</button>
               </div>
               <textarea
                 value={activeText.text}
                 onChange={(e) => updateText(activeText.id, { text: e.target.value })}
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-sm outline-none focus:border-violet-400 resize-none transition"
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-sm outline-none focus:border-primary resize-none transition"
                 rows={2}
               />
               <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 flex justify-between"><span>Ukuran</span><span>{activeText.size}px</span></label>
+                <label className="text-[10px] text-text-muted flex justify-between"><span>Ukuran</span><span>{activeText.size}px</span></label>
                 <input
                   type="range" min="16" max="96" value={activeText.size}
                   onChange={(e) => updateText(activeText.id, { size: +e.target.value })}
-                  className="w-full accent-violet-500"
+                  className="w-full accent-primary"
                 />
               </div>
               <div className="flex items-center gap-3">
-                <label className="text-[10px] text-zinc-500">Warna</label>
+                <label className="text-[10px] text-text-muted">Warna</label>
                 <input
                   type="color" value={activeText.color}
                   onChange={(e) => updateText(activeText.id, { color: e.target.value })}
@@ -453,17 +453,17 @@ export default function EditorPage() {
                 />
                 <button
                   onClick={() => updateText(activeText.id, { bold: !activeText.bold })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeText.bold ? "bg-white text-black" : "bg-white/5 text-zinc-400 hover:text-white"}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeText.bold ? "bg-white text-black" : "bg-white/5 text-text-muted hover:text-white"}`}
                 >
                   Bold
                 </button>
               </div>
-              <div className="text-[10px] text-zinc-600">Drag teks di preview untuk pindah posisi.</div>
+              <div className="text-[10px] text-text-muted/60">Drag teks di preview untuk pindah posisi.</div>
               <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                <span className="text-[10px] text-zinc-500">Template:</span>
+                <span className="text-[10px] text-text-muted">Template:</span>
                 <button
                   onClick={() => setTool("subtitle")}
-                  className="text-[10px] text-violet-400 hover:text-violet-300 underline"
+                  className="text-[10px] text-primary hover:text-primary/70 underline"
                 >
                   {SUBTITLE_TEMPLATES.find((t) => t.id === subtitleTemplate)?.name || "modern"} →
                 </button>
@@ -473,11 +473,11 @@ export default function EditorPage() {
 
           {splitPoint !== null && (
             <div className="space-y-2">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Split Point</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Split Point</div>
               <div className="text-sm bg-amber-400/10 border border-amber-400/30 rounded-xl px-3 py-2">
                 Potong di <span className="font-mono text-amber-300">{fmtT(splitPoint)}</span>
               </div>
-              <button onClick={() => setSplitPoint(null)} className="text-xs text-zinc-500 hover:text-white transition">
+              <button onClick={() => setSplitPoint(null)} className="text-xs text-text-muted hover:text-white transition">
                 Hapus split
               </button>
             </div>
@@ -485,21 +485,21 @@ export default function EditorPage() {
 
           {tool === "volume" && (
             <div className="space-y-2">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Volume</div>
-              <input type="range" min="0" max="200" value={volume} onChange={(e) => applyVolume(+e.target.value)} className="w-full accent-violet-500" />
-              <div className="text-sm font-mono text-zinc-300">{volume}%</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Volume</div>
+              <input type="range" min="0" max="200" value={volume} onChange={(e) => applyVolume(+e.target.value)} className="w-full accent-primary" />
+              <div className="text-sm font-mono text-text">{volume}%</div>
             </div>
           )}
 
           {tool === "speed" && (
             <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Kecepatan</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Kecepatan</div>
               <div className="grid grid-cols-4 gap-2">
                 {[0.5, 1, 1.5, 2].map((s) => (
                   <button
                     key={s}
                     onClick={() => applySpeed(s)}
-                    className={`py-2 rounded-lg text-xs transition ${speed === s ? "bg-violet-500 text-white font-bold" : "bg-white/5 text-zinc-400 hover:text-white"}`}
+                    className={`py-2 rounded-lg text-xs transition ${speed === s ? "bg-primary text-white font-bold" : "bg-white/5 text-text-muted hover:text-white"}`}
                   >
                     {s}x
                   </button>
@@ -510,31 +510,31 @@ export default function EditorPage() {
 
           {tool === "filter" && (
             <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Filter</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Filter</div>
               <div className="grid grid-cols-2 gap-2">
                 {[["", "Normal"], ["grayscale(1)", "B&W"], ["sepia(0.7)", "Vintage"], ["contrast(1.35) saturate(1.2)", "Pop"], ["saturate(1.6)", "Vivid"], ["brightness(1.15) contrast(0.95)", "Soft"]].map(([f, name]) => (
                   <button
                     key={name}
                     onClick={() => setCssFilter(f)}
-                    className={`py-2.5 rounded-lg text-xs transition ${cssFilter === f ? "bg-violet-500 text-white font-bold" : "bg-white/5 text-zinc-300 hover:bg-white/10"}`}
+                    className={`py-2.5 rounded-lg text-xs transition ${cssFilter === f ? "bg-primary text-white font-bold" : "bg-white/5 text-text hover:bg-white/10"}`}
                   >
                     {name}
                   </button>
                 ))}
               </div>
-              <div className="text-[10px] text-zinc-600">Preview real-time. Saat export, filter diterapkan via FFmpeg.</div>
+              <div className="text-[10px] text-text-muted/60">Preview real-time. Saat export, filter diterapkan via FFmpeg.</div>
             </div>
           )}
 
           {tool === "sticker" && (
             <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Stiker</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Stiker</div>
               <div className="flex flex-wrap gap-1.5">
                 {stickerPacks.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setStickerPack(p.id)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] transition ${stickerPack === p.id ? "bg-violet-500 text-white font-bold" : "bg-white/5 text-zinc-400 hover:text-white"}`}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] transition ${stickerPack === p.id ? "bg-primary text-white font-bold" : "bg-white/5 text-text-muted hover:text-white"}`}
                   >
                     {p.name}
                   </button>
@@ -564,10 +564,10 @@ export default function EditorPage() {
 
           {tool === "media" && (
             <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Foto / Video / GIF</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Foto / Video / GIF</div>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full py-6 rounded-xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:border-white/40 transition text-sm"
+                className="w-full py-6 rounded-xl border border-dashed border-white/20 text-text-muted hover:text-white hover:border-white/40 transition text-sm"
               >
                 + Upload Media
               </button>
@@ -591,10 +591,10 @@ export default function EditorPage() {
                       <button
                         key={f}
                         onClick={() => addMediaLayer(f, isVid ? "video" : "image")}
-                        className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-violet-400 transition relative bg-white/5"
+                        className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-primary transition relative bg-white/5"
                       >
                         {isVid ? (
-                          <span className="absolute inset-0 flex items-center justify-center text-[9px] text-zinc-400">▶ {f.slice(0, 10)}</span>
+                          <span className="absolute inset-0 flex items-center justify-center text-[9px] text-text-muted">▶ {f.slice(0, 10)}</span>
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={`${API}/api/jobs/${jobId}/media/${f}`} alt={f} className="w-full h-full object-cover" />
@@ -605,43 +605,43 @@ export default function EditorPage() {
                 </div>
               )}
               {mediaFiles.length === 0 && (
-                <div className="text-[10px] text-zinc-600">Upload foto/video/GIF, lalu klik untuk tambah ke timeline.</div>
+                <div className="text-[10px] text-text-muted/60">Upload foto/video/GIF, lalu klik untuk tambah ke timeline.</div>
               )}
             </div>
           )}
 
           {tool === "subtitle" && (
             <div className="space-y-3">
-              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Template Subtitle</div>
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Template Subtitle</div>
               <div className="space-y-2">
                 {SUBTITLE_TEMPLATES.map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setSubtitleTemplate(t.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl border transition ${subtitleTemplate === t.id ? "border-violet-400 bg-violet-500/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl border transition ${subtitleTemplate === t.id ? "border-primary bg-primary/15" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"}`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-white">{t.name}</span>
                       {subtitleTemplate === t.id && (
-                        <span className="text-violet-400 text-xs">✓ dipilih</span>
+                        <span className="text-primary text-xs">✓ dipilih</span>
                       )}
                     </div>
-                    <div className="text-[10px] text-zinc-500">{t.desc}</div>
+                    <div className="text-[10px] text-text-muted">{t.desc}</div>
                   </button>
                 ))}
               </div>
-              <div className="text-[10px] text-zinc-600">Template ini dipakai saat Export untuk semua teks overlay.</div>
+              <div className="text-[10px] text-text-muted/60">Template ini dipakai saat Export untuk semua teks overlay.</div>
             </div>
           )}
 
           {!hasPanel && (
-            <div className="space-y-3 text-zinc-600">
-              <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Tips</div>
+            <div className="space-y-3 text-text-muted/60">
+              <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">Tips</div>
               <div className="text-xs leading-relaxed space-y-2">
                 <div>• Klik timeline untuk seek cepat</div>
-                <div>• Posisikan playhead, lalu klik <b className="text-zinc-400">✂ Split</b> untuk tandai potongan</div>
-                <div>• Tool <b className="text-zinc-400">Teks</b> menambah overlay yang bisa di-drag</div>
-                <div>• Klik <b className="text-zinc-400">Export</b> untuk render semua perubahan</div>
+                <div>• Posisikan playhead, lalu klik <b className="text-text-muted">✂ Split</b> untuk tandai potongan</div>
+                <div>• Tool <b className="text-text-muted">Teks</b> menambah overlay yang bisa di-drag</div>
+                <div>• Klik <b className="text-text-muted">Export</b> untuk render semua perubahan</div>
               </div>
             </div>
           )}
@@ -664,7 +664,7 @@ export default function EditorPage() {
               <div className="ml-0.5 w-0 h-0 border-t-[7px] border-t-transparent border-l-[11px] border-l-white border-b-[7px] border-b-transparent" />
             )}
           </button>
-          <span className="text-[11px] font-mono text-zinc-400 tabular-nums">{fmtT(currentTime)}</span>
+          <span className="text-[11px] font-mono text-text-muted tabular-nums">{fmtT(currentTime)}</span>
           <div className="flex-1" />
           {splitPoint !== null && (
             <span className="text-[11px] text-amber-300 flex items-center gap-1">✂ {fmtT(splitPoint)}</span>
@@ -673,7 +673,7 @@ export default function EditorPage() {
         <div className="flex-1 relative px-4 py-3 select-none">
           {/* video track */}
           <div
-            className="absolute left-4 right-4 top-3 h-12 rounded-xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-white/5 overflow-hidden cursor-pointer"
+            className="absolute left-4 right-4 top-3 h-12 rounded-xl bg-gradient-to-b from-bg-3 to-bg-2 border border-white/5 overflow-hidden cursor-pointer"
             onPointerDown={onTimelinePointerDown}
           >
             <div className="absolute inset-0 flex">
@@ -691,7 +691,7 @@ export default function EditorPage() {
           {/* ruler */}
           <div className="absolute left-4 right-4 bottom-1 h-3 flex justify-between px-0.5">
             {Array.from({ length: 9 }).map((_, i) => (
-              <span key={i} className="text-[8px] text-zinc-600 font-mono">
+              <span key={i} className="text-[8px] text-text-muted/60 font-mono">
                 {fmtT((duration / 8) * i)}
               </span>
             ))}

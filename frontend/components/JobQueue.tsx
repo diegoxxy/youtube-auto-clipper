@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { apiUrl } from "@/lib/api";
 
-export function JobQueue() {
+export function JobQueue({ excludeJobId }: { excludeJobId?: string | null }) {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,27 +43,28 @@ export function JobQueue() {
     }
   };
 
-  if (jobs.length === 0)
-    return <div className="text-xs text-muted-foreground">Tidak ada job berjalan</div>;
+  const visible = jobs.filter((j) => j.jobId !== excludeJobId);
+
+  if (visible.length === 0) return null;
 
   return (
-    <div className="space-y-2 max-h-48 overflow-y-auto bg-zinc-900/50 border border-zinc-800 rounded-lg p-3">
-      <div className="text-xs font-semibold text-zinc-400 mb-2">
-        {jobs.length} Job Berjalan
+    <div className="space-y-2 max-h-48 overflow-y-auto card p-3">
+      <div className="text-xs font-semibold text-text-muted mb-2">
+        {visible.length} Job Berjalan
       </div>
-      {jobs.map((j) => (
+      {visible.map((j) => (
         <div
           key={j.jobId}
-          className="flex items-center justify-between gap-2 text-xs bg-zinc-950 p-2 rounded border border-zinc-800"
+          className="flex items-center justify-between gap-2 text-xs bg-bg p-2 rounded border border-border"
         >
           <div className="flex-1 min-w-0">
-            <div className="font-mono truncate text-zinc-300">
+            <div className="font-mono truncate text-text">
               {j.jobId.slice(0, 8)}
             </div>
-            <div className="text-zinc-500 truncate">
+            <div className="text-text-muted truncate">
               {j.videoInfo?.title || "?"}
             </div>
-            <div className="text-zinc-400">
+            <div className="text-text-muted">
               {j.status} · {j.progress}%{" "}
               {j.clips && `· ${j.clips.length} clip`}
             </div>

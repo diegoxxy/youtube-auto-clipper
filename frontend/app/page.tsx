@@ -137,7 +137,7 @@ export default function Home() {
   const SUB_TEMPLATES = [
     { id: "karaoke", name: "Karaoke Kuning", desc: "Kata aktif nyala kuning" },
     { id: "hormozi", name: "Hormozi Box", desc: "Box hitam + kata hijau" },
-    { id: "beast", name: "MrBeast Pop", desc: "Kapital, glow hijau" },
+    { id: "beast", name: "MrBeast Pop", desc: "Kapital,  hijau" },
     { id: "clean", name: "Clean Minimal", desc: "Putih polos, tipis" },
     { id: "bold", name: "Bold Kuning", desc: "TikTok PWK style" },
     { id: "ttbox", name: "TikTok Box", desc: "Box kuning kontras" },
@@ -147,28 +147,28 @@ export default function Home() {
     <main className="min-h-screen pb-24">
       <Hero />
       {restoring && (
-        <div className="max-w-3xl mx-auto px-4 mb-3 text-center text-sm text-zinc-400">
+        <div className="max-w-3xl mx-auto px-4 mb-3 text-center text-sm text-text-muted">
           Mengambil clip terakhir…
         </div>
       )}
 
       {/* Job Queue - running jobs */}
       <section className="max-w-3xl mx-auto px-4 mb-4">
-        <JobQueue />
+        <JobQueue excludeJobId={job?.jobId ?? null} />
       </section>
 
       {/* Input section */}
       <section className="max-w-3xl mx-auto px-4 -mt-10 relative z-10" id="generate">
-        <form onSubmit={handleGenerate} className="glass rounded-3xl p-6 md:p-8 space-y-5 glow">
+        <form onSubmit={handleGenerate} className="card rounded-3xl p-6 md:p-8 space-y-5 ">
           {/* Mode toggle: YouTube vs Upload */}
-          <div className="flex gap-2 bg-ink-2/60 border border-edge rounded-2xl p-1.5">
+          <div className="flex gap-2 bg-bg-2/60 border border-border rounded-2xl p-1.5">
             {(["youtube", "upload"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => { setMode(m); setError(null); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition ${
-                  mode === m ? "bg-brand/20 text-white border border-brand/50" : "text-zinc-400 hover:text-white"
+                  mode === m ? "bg-primary/20 text-white border border-primary/50" : "text-text-muted hover:text-white"
                 }`}
               >
                 {m === "youtube" ? "🔗 Link YouTube" : "📁 Upload Video"}
@@ -178,28 +178,28 @@ export default function Home() {
 
           {mode === "youtube" ? (
             <div>
-              <label className="text-sm font-medium text-zinc-400 block mb-2">Link Video YouTube</label>
+              <label className="text-sm font-medium text-text-muted block mb-2">Link Video YouTube</label>
               <input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://youtube.com/watch?v=..."
-                className="w-full bg-ink-2/80 border border-edge rounded-2xl px-4 py-3.5 text-base outline-none focus:border-brand placeholder:text-zinc-600 transition"
+                className="w-full bg-bg-2/80 border border-border rounded-2xl px-4 py-3.5 text-base outline-none focus:border-primary placeholder:text-text-muted/60 transition"
               />
             </div>
           ) : (
             <div>
-              <label className="text-sm font-medium text-zinc-400 block mb-2">
-                File Video <span className="text-zinc-600">(mp4 / webm / mkv / mov — maks 1GB)</span>
+              <label className="text-sm font-medium text-text-muted block mb-2">
+                File Video <span className="text-text-muted/60">(mp4 / webm / mkv / mov — maks 1GB)</span>
               </label>
-              <label className="flex flex-col items-center justify-center gap-2 w-full bg-ink-2/80 border-2 border-dashed border-edge rounded-2xl px-4 py-8 cursor-pointer hover:border-brand/60 transition">
+              <label className="flex flex-col items-center justify-center gap-2 w-full bg-bg-2/80 border-2 border-dashed border-border rounded-2xl px-4 py-8 cursor-pointer hover:border-primary/60 transition">
                 <span className="text-3xl">🎬</span>
                 {file ? (
                   <span className="text-sm text-white font-medium">{file.name}</span>
                 ) : (
-                  <span className="text-sm text-zinc-400">Klik untuk pilih file, atau drag & drop di sini</span>
+                  <span className="text-sm text-text-muted">Klik untuk pilih file, atau drag & drop di sini</span>
                 )}
                 {file && (
-                  <span className="text-xs text-zinc-500">{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                  <span className="text-xs text-text-muted">{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
                 )}
                 <input
                   type="file"
@@ -212,7 +212,7 @@ export default function Home() {
           )}
 
           <div>
-            <label className="text-sm font-medium text-zinc-400 block mb-2">
+            <label className="text-sm font-medium text-text-muted block mb-2">
               Brief / Instruksi (opsional)
             </label>
             <textarea
@@ -220,13 +220,13 @@ export default function Home() {
               onChange={(e) => setBrief(e.target.value)}
               placeholder="Contoh: fokus momen lucu + insight bisnis, buang bagian basa-basi"
               rows={3}
-              className="w-full bg-ink-2/80 border border-edge rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand placeholder:text-zinc-600 transition resize-none"
+              className="w-full bg-bg-2/80 border border-border rounded-2xl px-4 py-3 text-sm outline-none focus:border-primary placeholder:text-text-muted/60 transition resize-none"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium text-zinc-400 block mb-2">Template Subtitle</label>
-            <p className="text-xs text-zinc-500 px-1 py-1">Klik template untuk lihat preview video 4 detik. Karaoke = kata aktif nyala warna.</p>
+            <label className="text-sm font-medium text-text-muted block mb-2">Template Subtitle</label>
+            <p className="text-xs text-text-muted px-1 py-1">Klik template untuk lihat preview video 4 detik. Karaoke = kata aktif nyala warna.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-2">
               {SUB_TEMPLATES.map((t) => (
                 <button
@@ -234,7 +234,7 @@ export default function Home() {
                   type="button"
                   onClick={() => setSubTpl(t.id)}
                   className={`relative rounded-xl overflow-hidden border-2 transition aspect-[9/16] ${
-                    subTpl === t.id ? "border-brand shadow-lg shadow-brand/30" : "border-edge hover:border-zinc-600"
+                    subTpl === t.id ? "border-primary shadow-lg shadow-primary/30" : "border-border hover:border-border-light"
                   }`}
                 >
                   <video
@@ -247,10 +247,10 @@ export default function Home() {
                   />
                   <span className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent px-2 py-3 text-left">
                     <span className="block text-[11px] font-bold text-white leading-tight">{t.name}</span>
-                    <span className="block text-[9px] text-zinc-300 leading-tight">{t.desc}</span>
+                    <span className="block text-[9px] text-text leading-tight">{t.desc}</span>
                   </span>
                   {subTpl === t.id && (
-                    <span className="absolute top-1.5 right-1.5 z-10 text-[10px] font-black bg-brand text-white rounded-full px-2 py-0.5">
+                    <span className="absolute top-1.5 right-1.5 z-10 text-[10px] font-black bg-primary text-white rounded-full px-2 py-0.5">
                       ✓
                     </span>
                   )}
@@ -260,20 +260,20 @@ export default function Home() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-zinc-400 block mb-2">Durasi clip</label>
-            <p className="text-xs text-zinc-500 px-1 py-2">Otomatis — mengikuti topik yang dibahas, selesai saat topik kelar (5-90s)</p>
+            <label className="text-sm font-medium text-text-muted block mb-2">Durasi clip</label>
+            <p className="text-xs text-text-muted px-1 py-2">Otomatis — mengikuti topik yang dibahas, selesai saat topik kelar (5-90s)</p>
           </div>
 
           <div>
-            <label className="text-sm font-medium text-zinc-400 block mb-2">Format video</label>
-            <div className="flex gap-2 bg-ink-2/60 border border-edge rounded-2xl p-1.5 mb-2">
+            <label className="text-sm font-medium text-text-muted block mb-2">Format video</label>
+            <div className="flex gap-2 bg-bg-2/60 border border-border rounded-2xl p-1.5 mb-2">
               {(["auto", "custom"] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
                   onClick={() => setFmtMode(m)}
                   className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${
-                    fmtMode === m ? "bg-brand/20 text-white border border-brand/50" : "text-zinc-400 hover:text-white"
+                    fmtMode === m ? "bg-primary/20 text-white border border-primary/50" : "text-text-muted hover:text-white"
                   }`}
                 >
                   {m === "auto" ? "🤖 Auto (AI pilih)" : "🎯 Custom"}
@@ -281,7 +281,7 @@ export default function Home() {
               ))}
             </div>
             {fmtMode === "auto" ? (
-              <p className="text-xs text-zinc-500 px-1 py-1">
+              <p className="text-xs text-text-muted px-1 py-1">
                 AI analisis tiap clip: podcast/talking-head → crop 9:16 ke wajah; entertainment/kamera gerak/music video → video gede band 79% + background blur tipis (gaya TikTok). Semua untuk TikTok/Reels/Shorts.
               </p>
             ) : (
@@ -297,11 +297,11 @@ export default function Home() {
                     type="button"
                     onClick={() => setCustomFmt(f.id)}
                     className={`rounded-xl border-2 px-3 py-2.5 text-left transition ${
-                      customFmt === f.id ? "border-brand bg-brand/10" : "border-edge hover:border-zinc-600"
+                      customFmt === f.id ? "border-primary bg-primary/10" : "border-border hover:border-border-light"
                     }`}
                   >
                     <span className="block text-sm font-bold text-white">{f.name}</span>
-                    <span className="block text-[11px] text-zinc-400">{f.desc}</span>
+                    <span className="block text-[11px] text-text-muted">{f.desc}</span>
                   </button>
                 ))}
               </div>
@@ -309,15 +309,15 @@ export default function Home() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-zinc-400 block mb-2">
+            <label className="text-sm font-medium text-text-muted block mb-2">
               Reference Video (opsional) — AI belajar gaya editing dari video ini
             </label>
-            <label className="flex items-center gap-3 w-full bg-ink-2/80 border border-edge rounded-2xl px-4 py-3 cursor-pointer hover:border-brand/60 transition">
+            <label className="flex items-center gap-3 w-full bg-bg-2/80 border border-border rounded-2xl px-4 py-3 cursor-pointer hover:border-primary/60 transition">
               <span className="text-xl">🎨</span>
               {refFile ? (
                 <span className="text-sm text-white">{refFile.name}</span>
               ) : (
-                <span className="text-sm text-zinc-400">Upload video referensi</span>
+                <span className="text-sm text-text-muted">Upload video referensi</span>
               )}
               <input
                 type="file"
@@ -351,7 +351,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading || busy || (!url.trim() && !file)}
-            className="w-full py-4 rounded-2xl font-semibold text-base bg-gradient-to-r from-brand to-brand-2 text-white hover:opacity-90 active:scale-[0.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-4 rounded-2xl font-semibold text-base btn-primary text-white hover:opacity-90 active:scale-[0.99] transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading || busy ? (job?.status === "queued" ? "Mengantre..." : "Memproses...") : "⚡ Generate Clips"}
           </button>
@@ -362,12 +362,12 @@ export default function Home() {
       {job && (
         <section className="max-w-5xl mx-auto px-4 mt-12 space-y-6">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs uppercase tracking-wider text-zinc-500">
+            <span className="text-xs uppercase tracking-wider text-text-muted">
               {job.status === "done" ? "Clip tersimpan" : "Job berjalan"} · tidak hilang saat refresh
             </span>
             <button
               onClick={resetJob}
-              className="text-xs text-zinc-400 hover:text-white border border-edge rounded-lg px-3 py-1.5 hover:border-zinc-500 transition"
+              className="text-xs text-text-muted hover:text-white border border-border rounded-lg px-3 py-1.5 hover:border-border-light transition"
             >
               ＋ Job baru
             </button>
@@ -389,8 +389,8 @@ export default function Home() {
           )}
 
           {job && !["queued", "done", "failed"].includes(job.status) && (
-            <details className="group">
-              <summary className="cursor-pointer text-xs font-semibold text-zinc-400 hover:text-zinc-300 px-1 py-2 transition">
+            <details className="group min-h-[100px]">
+              <summary className="cursor-pointer text-xs font-semibold text-text-muted hover:text-text px-1 py-2 transition">
                 📋 Lihat log backend
               </summary>
               <div className="mt-3">
@@ -400,10 +400,10 @@ export default function Home() {
           )}
 
           {job.videoInfo && (
-            <div className="glass rounded-2xl px-5 py-4 flex flex-wrap items-center gap-4 text-sm">
-              <span className="font-semibold text-white">{job.videoInfo.title}</span>
-              <span className="text-zinc-500">
-                {Math.floor((job.videoInfo.duration ?? 0) / 60)} menit · {job.url}
+            <div className="card rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+              <span className="font-semibold text-white truncate mr-4">{job.videoInfo.title}</span>
+              <span className="text-text-muted shrink-0 whitespace-nowrap">
+                {Math.floor((job.videoInfo.duration ?? 0) / 60)} menit
               </span>
             </div>
           )}
@@ -411,7 +411,7 @@ export default function Home() {
           {job.status === "done" && (
             <button
               onClick={() => setSegOpen(true)}
-              className="mb-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-500/15 border border-violet-400/40 text-violet-300 text-sm font-semibold hover:bg-violet-500/25 transition"
+              className="mb-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary/15 border border-primary/40 text-primary/70 text-sm font-semibold hover:bg-primary/25 transition"
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current" strokeWidth="2">
                 <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
@@ -469,8 +469,8 @@ export default function Home() {
       />
 
       {rendering && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-[#1a1a24] border border-violet-400/40 rounded-2xl shadow-2xl shadow-violet-500/10">
-          <div className="w-4 h-4 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-bg-3 border border-primary/40 rounded-2xl shadow-2xl shadow-primary/10">
+          <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <span className="text-sm text-violet-200 font-medium">Render clip… (face tracking)</span>
         </div>
       )}

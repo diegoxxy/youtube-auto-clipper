@@ -53,18 +53,18 @@ export function TemplatePreview({ onSelect, onClose }: TemplatePreviewProps) {
   const [selected, setSelected] = useState("modern");
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop- flex items-center justify-center z-50 p-4">
+      <div className="bg-bg-2 border border-border rounded-3xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-white">Pilih Template Subtitle</h2>
-            <p className="text-sm text-zinc-400 mt-1">Preview style subtitle yang akan di-burn ke video</p>
+            <p className="text-sm text-text-muted mt-1">Preview style subtitle yang akan di-burn ke video</p>
           </div>
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"
+            className="w-10 h-10 rounded-full bg-bg-3 hover:bg-bg-2 flex items-center justify-center transition"
           >
-            <span className="text-zinc-400 text-xl">×</span>
+            <span className="text-text-muted text-xl">×</span>
           </button>
         </div>
 
@@ -76,7 +76,7 @@ export function TemplatePreview({ onSelect, onClose }: TemplatePreviewProps) {
               className={`group relative rounded-2xl overflow-hidden border-2 transition ${
                 selected === tpl.id
                   ? "border-purple-500 bg-purple-500/10"
-                  : "border-zinc-700 hover:border-zinc-600"
+                  : "border-border hover:border-border-light"
               }`}
             >
               {/* Preview frame (9:16 aspect) */}
@@ -122,9 +122,9 @@ export function TemplatePreview({ onSelect, onClose }: TemplatePreviewProps) {
               </div>
 
               {/* Info */}
-              <div className="p-4 bg-zinc-800/50">
+              <div className="p-4 bg-bg-3/50">
                 <h3 className="font-bold text-white mb-1">{tpl.name}</h3>
-                <p className="text-xs text-zinc-400">{tpl.desc}</p>
+                <p className="text-xs text-text-muted">{tpl.desc}</p>
               </div>
             </button>
           ))}
@@ -133,7 +133,7 @@ export function TemplatePreview({ onSelect, onClose }: TemplatePreviewProps) {
         <div className="flex items-center gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition"
+            className="flex-1 px-4 py-3 rounded-xl bg-bg-3 hover:bg-bg-2 text-white font-semibold transition"
           >
             Batal
           </button>
@@ -142,7 +142,7 @@ export function TemplatePreview({ onSelect, onClose }: TemplatePreviewProps) {
               onSelect(selected);
               onClose();
             }}
-            className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-700 hover:to-cyan-600 text-white font-semibold transition"
+            className="flex-1 px-4 py-3 rounded-xl bg-bg-subtle from-purple-600 to-cyan-500 hover:from-purple-700 hover:to-cyan-600 text-white font-semibold transition"
           >
             Pilih {TEMPLATES.find((t) => t.id === selected)?.name}
           </button>

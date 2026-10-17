@@ -33,13 +33,13 @@ function scoreColor(s: number) {
   if (s >= 8) return "text-emerald-400";
   if (s >= 6.5) return "text-yellow-400";
   if (s >= 5) return "text-orange-400";
-  return "text-zinc-400";
+  return "text-text-muted";
 }
 function scoreBar(s: number) {
   if (s >= 8) return "bg-emerald-500";
   if (s >= 6.5) return "bg-yellow-500";
   if (s >= 5) return "bg-orange-500";
-  return "bg-zinc-600";
+  return "bg-border-light";
 }
 
 export default function SegmentPicker({
@@ -73,18 +73,18 @@ export default function SegmentPicker({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-[#14141b] border border-white/10 rounded-2xl overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-bg-elevated border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <h2 className="text-lg font-bold text-white">Pilih momen viral</h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-text-muted">
               {data?.totalSegments ? `${data.totalSegments} segmen transcript • ` : ""}
               di-score otomatis, pilih yang mau di-render
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition flex items-center justify-center"
+            className="w-8 h-8 rounded-lg text-text-muted hover:text-white hover:bg-white/10 transition flex items-center justify-center"
             aria-label="Tutup"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-none stroke-current" strokeWidth="2">
@@ -95,11 +95,11 @@ export default function SegmentPicker({
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {loading && (
-            <div className="py-12 text-center text-zinc-500 text-sm">Menganalisis transcript…</div>
+            <div className="py-12 text-center text-text-muted text-sm">Menganalisis transcript…</div>
           )}
           {!loading && cands.length === 0 && (
             <div className="py-12 text-center">
-              <p className="text-zinc-400 text-sm">
+              <p className="text-text-muted text-sm">
                 {data?.note || "Belum ada kandidat. Tunggu sampai transcript selesai."}
               </p>
             </div>
@@ -114,7 +114,7 @@ export default function SegmentPicker({
                   onClick={() => setPicked(i)}
                   className={`w-full text-left p-3.5 rounded-xl border transition flex gap-3.5 ${
                     selected
-                      ? "border-violet-400 bg-violet-500/10"
+                      ? "border-primary bg-primary/10"
                       : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                   }`}
                 >
@@ -122,17 +122,17 @@ export default function SegmentPicker({
                     <span className={`text-xl font-black ${scoreColor(c.overall)}`}>
                       {c.overall.toFixed(1)}
                     </span>
-                    <span className="text-[9px] text-zinc-600 uppercase">score</span>
+                    <span className="text-[9px] text-text-muted/60 uppercase">score</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] text-zinc-500 font-mono">
+                      <span className="text-[10px] text-text-muted font-mono">
                         {fmtT(c.start)} – {fmtT(c.end)}
                       </span>
-                      <span className="text-[10px] text-zinc-600">·</span>
-                      <span className="text-[10px] text-zinc-500">{dur.toFixed(1)}s</span>
+                      <span className="text-[10px] text-text-muted/60">·</span>
+                      <span className="text-[10px] text-text-muted">{dur.toFixed(1)}s</span>
                       {c.label && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-zinc-400">
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-text-muted">
                           {c.label}
                         </span>
                       )}
@@ -143,7 +143,7 @@ export default function SegmentPicker({
                         {c.tags.slice(0, 4).map((t) => (
                           <span
                             key={t}
-                            className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300"
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-primary/15 text-primary/70"
                           >
                             {TAG_LABEL[t] || t}
                           </span>
@@ -163,7 +163,7 @@ export default function SegmentPicker({
         </div>
 
         <div className="px-5 py-4 border-t border-white/10 flex items-center justify-between">
-          <span className="text-[10px] text-zinc-600">
+          <span className="text-[10px] text-text-muted/60">
             {picked !== null
               ? `Terpilih: ${fmtT(cands[picked].start)} – ${fmtT(cands[picked].end)} (${(cands[picked].end - cands[picked].start).toFixed(1)}s)`
               : "Pilih segmen dulu"}
@@ -171,7 +171,7 @@ export default function SegmentPicker({
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-white border border-white/10 hover:border-white/20 transition"
+              className="px-4 py-2 rounded-xl text-sm text-text-muted hover:text-white border border-white/10 hover:border-white/20 transition"
             >
               Batal
             </button>
@@ -182,8 +182,8 @@ export default function SegmentPicker({
               }}
               className={`px-5 py-2 rounded-xl text-sm font-semibold transition ${
                 picked === null
-                  ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-                  : "bg-violet-500 hover:bg-violet-400 text-white"
+                  ? "bg-bg-3 text-text-muted/60 cursor-not-allowed"
+                  : "bg-primary hover:bg-primary text-white"
               }`}
             >
               Render clip ini

@@ -33,29 +33,29 @@ export function JobLogs({ jobId }: { jobId: string }) {
   return (
     <div className="glass rounded-2xl p-5">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-zinc-200">Log Backend</h3>
+        <h3 className="font-semibold text-text">Log Backend</h3>
         <button
           onClick={() => setAutoRefresh(!autoRefresh)}
           className={`text-xs px-3 py-1.5 rounded-lg transition ${
             autoRefresh
-              ? "bg-brand/20 text-brand border border-brand/50"
-              : "bg-ink-2 text-zinc-400 border border-edge hover:border-zinc-600"
+              ? "bg-primary/20 text-primary border border-primary/50"
+              : "bg-bg-2 text-text-muted border border-border hover:border-border-light"
           }`}
         >
           {autoRefresh ? "⏸ Pause" : "▶ Resume"}
         </button>
       </div>
-      {loading && <div className="text-sm text-zinc-500">Memuat log...</div>}
+      {loading && <div className="text-sm text-text-muted">Memuat log...</div>}
       {error && (
         <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
           {error}
         </div>
       )}
       {!loading && !error && logs.length === 0 && (
-        <div className="text-sm text-zinc-500">Tidak ada log backend untuk job ini.</div>
+        <div className="text-sm text-text-muted">Tidak ada log backend untuk job ini.</div>
       )}
       {logs.length > 0 && (
-        <div className="bg-ink-2/60 border border-edge rounded-xl p-3 max-h-80 overflow-y-auto font-mono text-xs text-zinc-300 space-y-0.5">
+        <div className="bg-bg-2/60 border border-border rounded-xl p-3 max-h-80 overflow-y-auto font-mono text-xs text-text space-y-0.5">
           {logs.map((line, i) => (
             <div key={i} className="whitespace-pre-wrap break-all">
               {line}
